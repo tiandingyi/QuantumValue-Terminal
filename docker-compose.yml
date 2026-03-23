@@ -1,0 +1,121 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: qvt-postgres
+    env_file:
+      - .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    networks:
+      - qvt-net
+
+  db-migrate:
+    image: migrate/migrate:v4.18.2
+    container_name: qvt-db-migrate
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    command:
+      [
+        "-path",
+        "/migrations",
+        "-database",
+        "${MIGRATIONS_DATABASE_URL}",
+        "up"
+      ]
+    volumes:
+      - ./db/migrations:/migrations:ro
+    restart: "no"
+    networks:
+      - qvt-net
+
+  engine-py:
+    build:
+      context: .
+      dockerfile: services/python-engine/Dockerfile
+    container_name: qvt-engine-py
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      db-migrate:
+        condition: service_completed_successfully
+    ports:
+      - "${ENGINE_PY_PORT:-8000}:8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/healthz')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qvt-net
+
+  api-go:
+    build:
+      context: .
+      dockerfile: services/go-gateway/Dockerfile
+    container_name: qvt-api-go
+    env_file:
+      - .env
+    environment:
+      PORT: 8080
+      ENGINE_BASE_URL: ${ENGINE_BASE_URL}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      DATABASE_URL: ${DATABASE_URL}
+    depends_on:
+      engine-py:
+        condition: service_healthy
+    ports:
+      - "${API_GO_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - qvt-net
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+        INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL}
+    container_name: qvt-web
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL}
+      INTERNAL_API_BASE_URL: ${INTERNAL_API_BASE_URL}
+    depends_on:
+      api-go:
+        condition: service_healthy
+    ports:
+      - "${WEB_PORT:-3000}:3000"
+    networks:
+      - qvt-net
+
+volumes:
+  postgres-data:
+
+networks:
+  qvt-net:
+    driver: bridge

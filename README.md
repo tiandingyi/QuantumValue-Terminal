@@ -25,11 +25,26 @@ This repository now includes the initial `pnpm` workspace and Turborepo wiring f
 - Start only the web app: `pnpm dev:web`
 - Build all configured workspaces: `pnpm build`
 
+## Local Full-Stack Docker
+
+The repository now includes a root `docker-compose.yml` for the local stack.
+
+1. Create a local env file from the template:
+   `cp .env.example .env`
+2. Start the stack:
+   `docker compose up --build`
+3. Open the frontend:
+   `http://localhost:3000`
+4. Check the Go API directly:
+   `http://localhost:8080/healthz`
+5. Check the Python engine directly:
+   `http://localhost:8000/healthz`
+
 ## Current Layout
 
 - `apps/web`: Next.js 15 App Router frontend migrated from the staged dashboard template
 - `design/frontend-template`: untouched raw HTML reference and staging area
-- `services/go-gateway`: placeholder directory for the Gin API gateway
-- `services/python-engine`: placeholder directory for the FastAPI ingestion service
-- `db/migrations`: future SQL migration source of truth
+- `services/go-gateway`: minimal Gin API gateway with health and handshake endpoints
+- `services/python-engine`: minimal FastAPI engine service for local orchestration
+- `db/migrations`: SQL migration source of truth for the local Postgres stack
 - `infra`: future local environment and deployment scaffolding

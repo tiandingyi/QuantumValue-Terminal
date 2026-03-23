@@ -13,3 +13,11 @@
 - Keep raw template files, screenshots, and copied vendor assets in `design/frontend-template/`.
 - Keep production app code only in `apps/web`.
 - Do not edit the raw template in place once migration work starts; use it as a reference source of truth.
+
+User Story 2: One-Command Full-Stack Environment
+- Requirement: I want to configure a comprehensive docker-compose.yml that networks all services together.
+- Reason: So that any team member can start the web app, Go API, Python engine, and database migrations with a single command to perform end-to-end testing.
+- Acceptance Criteria:
+    - docker-compose.yml orchestrates the web (Next.js), api-go (Gin), engine-py (FastAPI), and db-migrate services.
+    - Docker internal networking is correctly configured so the Next.js container can securely route API calls to the Go container, and Go can route to Python.
+    - Local environment variables and CORS policies are managed via a .env.example template to allow seamless cross-origin requests during local development.

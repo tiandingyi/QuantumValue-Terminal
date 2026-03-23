@@ -1,3 +1,7 @@
 # Python Engine
 
-This service directory is reserved for the future FastAPI ingestion and SEC sync service described in `memory-bank/PRD.md`.
+This service now contains the minimal FastAPI engine used by the local Docker stack.
+
+Current endpoints:
+
+- `GET /healthz`

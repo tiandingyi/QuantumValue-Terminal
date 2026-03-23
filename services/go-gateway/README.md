@@ -1,3 +1,8 @@
 # Go Gateway
 
-This service directory is reserved for the future Gin-based API gateway described in `memory-bank/PRD.md`.
+This service now contains the minimal Gin-based API gateway for local Docker orchestration.
+
+Current endpoints:
+
+- `GET /healthz`
+- `GET /api/v1/handshake`
