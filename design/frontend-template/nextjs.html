@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-gradient-radial from-[#0a0a0c] to-[#000000] text-gray-100 font-sans">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Financial Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        .bg-gradient-radial { background: radial-gradient(circle, #0a0a0c 0%, #000000 100%); }
+        .neumorphic-shadow { box-shadow: inset 2px 2px 4px rgba(0,0,0,0.3), inset -2px -2px 4px rgba(255,255,255,0.05); }
+    </style>
+</head>
+<body class="h-full flex">
+    <!-- Fixed Left Sidebar -->
+    <aside class="fixed left-0 top-0 h-full w-20 bg-black/20 backdrop-blur-lg border-r border-gray-800 flex flex-col items-center py-8 space-y-8">
+        <!-- US Equity (Active) -->
+        <div class="p-3 rounded-lg bg-cyan-500/10 border border-cyan-400/30 shadow-lg shadow-cyan-500/20">
+            <svg class="w-6 h-6 text-cyan-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+            </svg>
+        </div>
+        <!-- HK Equity (Disabled) -->
+        <div class="p-3 rounded-lg opacity-50 grayscale">
+            <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
+            </svg>
+        </div>
+        <!-- A-Share (Disabled) -->
+        <div class="p-3 rounded-lg opacity-50 grayscale">
+            <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+        </div>
+        <!-- Funds (Disabled) -->
+        <div class="p-3 rounded-lg opacity-50 grayscale">
+            <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1"/>
+            </svg>
+        </div>
+        <!-- Global Indices (Disabled) -->
+        <div class="p-3 rounded-lg opacity-50 grayscale">
+            <svg class="w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064"/>
+            </svg>
+        </div>
+    </aside>
+
+    <!-- Main Content -->
+    <main class="flex-1 ml-20 flex flex-col">
+        <!-- Top Search Bar -->
+        <header class="p-6">
+            <div class="w-full max-w-4xl mx-auto">
+                <div class="relative">
+                    <input type="text" placeholder="Search tickers like AAPL, 0700.HK, 600519.SH" class="w-full pl-4 pr-12 py-3 bg-black/20 backdrop-blur-lg border border-gray-700 rounded-lg text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-cyan-400/50 focus:border-cyan-400">
+                    <svg class="absolute right-4 top-3 w-6 h-6 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
+                    </svg>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Content Area -->
+        <div class="flex-1 px-6 pb-6 space-y-8">
+            <!-- Hero Section: Chart -->
+            <section class="w-full h-96 bg-black/10 backdrop-blur-lg rounded-lg border border-gray-800 p-6 neumorphic-shadow">
+                <h2 class="text-2xl font-bold mb-4 text-white">10-Year Monthly Price Chart</h2>
+                <canvas id="priceChart" class="w-full h-full"></canvas>
+            </section>
+
+            <!-- Middle Section: Bento Grid -->
+            <section class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div class="bg-black/20 backdrop-blur-lg rounded-lg border border-gray-700 p-6 neumorphic-shadow">
+                    <h3 class="text-lg font-semibold mb-2 text-cyan-400">P/E Ratio</h3>
+                    <p class="text-3xl font-bold text-white">18.5</p>
+                </div>
+                <div class="bg-black/20 backdrop-blur-lg rounded-lg border border-gray-700 p-6 neumorphic-shadow">
+                    <h3 class="text-lg font-semibold mb-2 text-cyan-400">ROE</h3>
+                    <p class="text-3xl font-bold text-white">22.3%</p>
+                </div>
+                <div class="bg-black/20 backdrop-blur-lg rounded-lg border border-gray-700 p-6 neumorphic-shadow">
+                    <h3 class="text-lg font-semibold mb-2 text-cyan-400">Debt/Equity</h3>
+                    <p class="text-3xl font-bold text-white">0.45</p>
+                </div>
+                <div class="bg-black/20 backdrop-blur-lg rounded-lg border border-gray-700 p-6 neumorphic-shadow">
+                    <h3 class="text-lg font-semibold mb-2 text-cyan-400">Market Cap</h3>
+                    <p class="text-3xl font-bold text-white">$2.8T</p>
+                </div>
+                <div class="bg-black/20 backdrop-blur-lg rounded-lg border border-gray-700 p-6 neumorphic-shadow">
+                    <h3 class="text-lg font-semibold mb-2 text-cyan-400">Dividend Yield</h3>
+                    <p class="text-3xl font-bold text-white">1.2%</p>
+                </div>
+                <div class="bg-black/20 backdrop-blur-lg rounded-lg border border-gray-700 p-6 neumorphic-shadow">
+                    <h3 class="text-lg font-semibold mb-2 text-cyan-400">Beta</h3>
+                    <p class="text-3xl font-bold text-white">1.05</p>
+                </div>
+            </section>
+
+            <!-- Bottom Section: Table -->
+            <section class="bg-black/10 backdrop-blur-lg rounded-lg border border-gray-800 p-6 neumorphic-shadow">
+                <h2 class="text-2xl font-bold mb-4 text-white">Master Financial Matrix</h2>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm text-gray-300">
+                        <thead>
+                            <tr class="border-b border-gray-700">
+                                <th class="text-left py-2 font-semibold text-white">Year</th>
+                                <th class="text-right py-2 font-semibold text-white">Revenue</th>
+                                <th class="text-right py-2 font-semibold text-white">Net Income</th>
+                                <th class="text-right py-2 font-semibold text-white">EPS</th>
+                                <th class="text-right py-2 font-semibold text-white">Assets</th>
+                                <th class="text-right py-2 font-semibold text-white">Liabilities</th>
+                            </tr>
+                        </thead>
+                        <tbody class="font-mono">
+                            <tr class="border-b border-gray-800 bg-gray-900/20">
+                                <td class="py-2">2023</td>
+                                <td class="text-right py-2">394.3B</td>
+                                <td class="text-right py-2">97.0B</td>
+                                <td class="text-right py-2">6.13</td>
+                                <td class="text-right py-2">352.7B</td>
+                                <td class="text-right py-2">290.4B</td>
+                            </tr>
+                            <tr class="border-b border-gray-800">
+                                <td class="py-2">2022</td>
+                                <td class="text-right py-2">394.3B</td>
+                                <td class="text-right py-2">99.8B</td>
+                                <td class="text-right py-2">6.11</td>
+                                <td class="text-right py-2">352.7B</td>
+                                <td class="text-right py-2">302.0B</td>
+                            </tr>
+                            <tr class="border-b border-gray-800 bg-gray-900/20">
+                                <td class="py-2">2021</td>
+                                <td class="text-right py-2">365.8B</td>
+                                <td class="text-right py-2">94.7B</td>
+                                <td class="text-right py-2">5.61</td>
+                                <td class="text-right py-2">351.0B</td>
+                                <td class="text-right py-2">287.9B</td>
+                            </tr>
+                            <tr class="border-b border-gray-800">
+                                <td class="py-2">2020</td>
+                                <td class="text-right py-2">274.5B</td>
+                                <td class="text-right py-2">57.4B</td>
+                                <td class="text-right py-2">3.28</td>
+                                <td class="text-right py-2">323.9B</td>
+                                <td class="text-right py-2">258.5B</td>
+                            </tr>
+                            <tr class="border-b border-gray-800 bg-gray-900/20">
+                                <td class="py-2">2019</td>
+                                <td class="text-right py-2">260.2B</td>
+                                <td class="text-right py-2">55.3B</td>
+                                <td class="text-right py-2">2.97</td>
+                                <td class="text-right py-2">338.5B</td>
+                                <td class="text-right py-2">248.0B</td>
+                            </tr>
+                            <!-- Add more rows as needed for 10+ years -->
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+    </main>
+
+    <script>
+        const ctx = document.getElementById('priceChart').getContext('2d');
+        const priceChart = new Chart(ctx, {
+            type: 'line',
+            data: {
+                labels: ['2014', '2015', '2016', '2017', '2018', '2019', '2020', '2021', '2022', '2023', '2024'],
+                datasets: [{
+                    label: 'Price',
+                    data: [100, 120, 140, 160, 180, 200, 220, 240, 260, 280, 300],
+                    borderColor: '#00ffff',
+                    backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                    borderWidth: 2,
+                    fill: false,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#ccc' }
+                    },
+                    y: {
+                        grid: { color: 'rgba(255,255,255,0.1)' },
+                        ticks: { color: '#ccc' }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

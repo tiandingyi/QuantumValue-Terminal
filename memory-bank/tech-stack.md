@@ -1,0 +1,14 @@
+- **Monorepo Management:** Turborepo + pnpm Workspaces (Utilizing pnpm to eliminate phantom dependencies and significantly accelerate CI/CD build times).
+- **Frontend:** Next.js 15 (App Router) + Pure Tailwind CSS.
+- **API Gateway (Go):** Gin Gonic (High-performance routing, Cache-aside orchestration, and JSONB data pass-through).
+- **Analysis Engine (Python):** FastAPI + SQLAlchemy 2.0 (Dedicated to SEC EDGAR data scraping, Pydantic validation, and read-only ORM mapping).
+- **Database & Schema Control:**
+  - **Engine:** Supabase PostgreSQL (Using JSONB wide-format storage and GIN indexing for large financial time-series datasets).
+  - **Version Control:** `golang-migrate/migrate` (Acts as the single source of truth for SQL DDL execution and automated CI/CD schema migrations, preventing split-brain issues with the Python ORM).
+- **CI/CD:** GitHub Actions (Automated testing and deployment pipelines).
+- **Infrastructure (Zero-Cost Topology):**
+  - **Local:** `docker-compose` (Unified local parity environment for Next.js, Go, Python, and DB migrations).
+  - **Production:**
+    - **Frontend & Go API:** Vercel Free Tier (Serverless architecture for Go cold starts and seamless Next.js hosting).
+    - **Python Engine:** Render Free Tier (Containerized web service suited for long-running SEC scraping tasks).
+    - **Database Persistence:** Supabase Free Tier (500MB storage, optimized via JSONB).
