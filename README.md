@@ -44,6 +44,16 @@ The repository now includes a root `docker-compose.yml` for the local stack.
 7. Inspect the polling endpoint directly if needed:
    `http://localhost:8080/api/v1/status/AAPL`
 
+## CI
+
+GitHub Actions CI is defined in [ci.yml](/Users/dingyitian/Desktop/QuantumValue-Terminal/.github/workflows/ci.yml).
+
+- Triggers on pushes to `main`
+- Triggers on pull requests
+- Runs `pnpm test`, `pnpm lint`, and `pnpm build`
+- Verifies Node, Go, and Python service builds inside CI
+- Validates the Docker Compose configuration
+
 ## Current Layout
 
 - `apps/web`: Next.js 15 App Router frontend migrated from the staged dashboard template

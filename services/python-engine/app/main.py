@@ -1,6 +1,7 @@
 import asyncio
 import os
 from datetime import datetime, timezone
+from typing import Optional
 
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
@@ -17,7 +18,7 @@ class SyncState:
     def __init__(self) -> None:
         self._statuses: dict[str, SyncResponse] = {}
 
-    def get(self, ticker: str) -> SyncResponse | None:
+    def get(self, ticker: str) -> Optional[SyncResponse]:
         return self._statuses.get(ticker)
 
     def set(self, ticker: str, sync_status: str, message: str) -> SyncResponse:

@@ -15,3 +15,8 @@
   - Added Go gateway endpoints that forward mock sync and status requests to the Python engine.
   - Added Python engine mock async sync state with `IN_PROGRESS` to `SUCCESS` transitions.
   - Added frontend polling so the browser visibly moves from `IN_PROGRESS` to `SUCCESS` after a mock filing sync completes.
+- Completed Sprint 1 User Story 4 CI foundation:
+  - Added a GitHub Actions workflow that runs on pushes to `main` and on pull requests.
+  - Added monorepo test, lint, and build verification through the Turborepo pipeline.
+  - Added Go and Python workspace package scripts so non-frontend services participate in CI checks.
+  - Added Docker Compose syntax validation to catch orchestration regressions in CI.

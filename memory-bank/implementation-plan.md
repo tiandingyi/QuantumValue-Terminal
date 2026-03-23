@@ -30,3 +30,13 @@ User Story 3: The End-to-End "Handshake"
     ◦ The Go Gateway successfully receives the request and forwards a mock sync command to the Python Analysis Engine's /health or /sync endpoint.
     - The Python engine returns a successful response to Go, which then passes the result (or a 202 Accepted status) all the way back to the Next.js UI for display.
     - This entire flow is testable simply by running docker-compose up and interacting with localhost:3000 in the browser.
+
+User Story 4: Automated CI Pipeline
+- Requirement: I want to set up a GitHub Actions workflow.
+- Reason: So that automated testing and build checks are performed on every push to ensure code stability.
+- Acceptance Criteria:
+    - `.github/workflows/ci.yml` triggers on `push` to `main` and on `pull_request`.
+    - The workflow installs dependencies with the repository's pinned `pnpm` lockfile and uses the workspace Turborepo pipeline for `pnpm test`, `pnpm lint`, and `pnpm build`.
+    - The workflow provisions the required runtimes for Node.js, Go, and Python so all three services can be validated in CI.
+    - Frontend, Go, and Python build checks all pass in CI, and the Docker Compose configuration is syntax-validated.
+    - Any failed test, lint, or build step causes the workflow to fail.

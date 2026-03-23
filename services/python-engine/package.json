@@ -1,0 +1,10 @@
+{
+  "name": "engine-py",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "PYTHONPYCACHEPREFIX=.pycache python3 -m py_compile app/main.py",
+    "lint": "PYTHONPYCACHEPREFIX=.pycache python3 -m compileall app tests",
+    "test": "python3 -m pytest"
+  }
+}

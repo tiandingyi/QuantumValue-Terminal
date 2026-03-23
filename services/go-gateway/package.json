@@ -1,0 +1,10 @@
+{
+  "name": "api-go",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "build": "go build ./cmd/api",
+    "lint": "test -z \"$(gofmt -l cmd/api/*.go)\"",
+    "test": "go test ./..."
+  }
+}
