@@ -2,6 +2,14 @@
 
 QuantumValue Terminal is a documentation-first monorepo for a long-horizon fundamental analysis platform built on SEC EDGAR data.
 
+## Runtime Baseline
+
+- Node.js 22
+- pnpm 10
+- Go 1.25
+- Python 3.12
+- Tailwind CSS 4
+
 ## Project Context
 
 The main planning and agent context lives in `memory-bank/`:

@@ -20,3 +20,6 @@
   - Added monorepo test, lint, and build verification through the Turborepo pipeline.
   - Added Go and Python workspace package scripts so non-frontend services participate in CI checks.
   - Added Docker Compose syntax validation to catch orchestration regressions in CI.
+- Standardized runtime and frontend tooling versions:
+  - Locked the project baseline to Node.js 22, pnpm 10, Go 1.25, Python 3.12, and Tailwind CSS 4.
+  - Migrated the web app away from a Tailwind 3 config file to Tailwind 4 CSS-first theme tokens and PostCSS plugin wiring.

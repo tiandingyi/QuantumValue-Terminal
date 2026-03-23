@@ -2,6 +2,10 @@
   "name": "quantumvalue-terminal",
   "private": true,
   "packageManager": "pnpm@10.6.5",
+  "engines": {
+    "node": ">=22 <23",
+    "pnpm": ">=10 <11"
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
