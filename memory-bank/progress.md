@@ -10,3 +10,8 @@
   - Added `.env.example` to document local ports, internal service URLs, database credentials, and CORS origins.
   - Added a minimal Gin API gateway, FastAPI engine, and initial SQL migration set so the Docker stack can boot end to end.
   - Added a web stack health panel that checks the Go-to-Python handshake from the frontend.
+- Completed Sprint 1 User Story 3 handshake flow:
+  - Added ticker-triggered sync requests from the Next.js search UI.
+  - Added Go gateway endpoints that forward mock sync and status requests to the Python engine.
+  - Added Python engine mock async sync state with `IN_PROGRESS` to `SUCCESS` transitions.
+  - Added frontend polling so the browser visibly moves from `IN_PROGRESS` to `SUCCESS` after a mock filing sync completes.

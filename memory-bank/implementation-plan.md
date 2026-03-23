@@ -21,3 +21,12 @@ User Story 2: One-Command Full-Stack Environment
     - docker-compose.yml orchestrates the web (Next.js), api-go (Gin), engine-py (FastAPI), and db-migrate services.
     - Docker internal networking is correctly configured so the Next.js container can securely route API calls to the Go container, and Go can route to Python.
     - Local environment variables and CORS policies are managed via a .env.example template to allow seamless cross-origin requests during local development.
+
+User Story 3: The End-to-End "Handshake"
+- Requirement: I want to use the Next.js UI template to trigger a full-stack handshake request that flows through the Go Gateway to the Python Engine, running entirely within Docker Compose.
+- Reason: To validate the end-to-end network topology, API contracts, and the asynchronous 202 Accepted polling mechanism before building complex parsing logic.
+- Acceptance Criteria:
+    - An interaction on the Next.js UI (e.g., typing a ticker in the search bar and hitting enter) triggers an HTTP request to the Go Gateway.
+    ◦ The Go Gateway successfully receives the request and forwards a mock sync command to the Python Analysis Engine's /health or /sync endpoint.
+    - The Python engine returns a successful response to Go, which then passes the result (or a 202 Accepted status) all the way back to the Next.js UI for display.
+    - This entire flow is testable simply by running docker-compose up and interacting with localhost:3000 in the browser.

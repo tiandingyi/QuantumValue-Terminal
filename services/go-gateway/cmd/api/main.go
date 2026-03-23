@@ -1,11 +1,14 @@
 package main
 
 import (
+    "bytes"
     "encoding/json"
     "context"
+    "io"
     "log"
     "net/http"
     "os"
+    "regexp"
     "strings"
     "time"
 )
@@ -20,6 +23,13 @@ type handshakeResponse struct {
     Status    string          `json:"status"`
     Timestamp string          `json:"timestamp"`
     Services  []serviceStatus `json:"services"`
+}
+
+type syncResponse struct {
+    Ticker    string `json:"ticker"`
+    Status    string `json:"status"`
+    Message   string `json:"message"`
+    UpdatedAt string `json:"updated_at"`
 }
 
 func main() {
@@ -74,6 +84,64 @@ func main() {
             Timestamp: time.Now().UTC().Format(time.RFC3339),
             Services:  statuses,
         })
+    })
+
+    mux.HandleFunc("/api/v1/sync/", func(w http.ResponseWriter, r *http.Request) {
+        withCORS(w, r)
+        if r.Method == http.MethodOptions {
+            w.WriteHeader(http.StatusNoContent)
+            return
+        }
+        if r.Method != http.MethodPost {
+            writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+            return
+        }
+
+        ticker := strings.TrimPrefix(r.URL.Path, "/api/v1/sync/")
+        if !isValidTicker(ticker) {
+            writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ticker"})
+            return
+        }
+
+        statusCode, payload, err := proxyEngineRequest(r.Context(), http.MethodPost, engineBaseURL+"/sync/"+strings.ToUpper(ticker), nil)
+        if err != nil {
+            writeJSON(w, http.StatusBadGateway, map[string]string{
+                "status":  "ERROR",
+                "message": "Python engine is unavailable.",
+            })
+            return
+        }
+
+        writeRawJSON(w, statusCode, payload)
+    })
+
+    mux.HandleFunc("/api/v1/status/", func(w http.ResponseWriter, r *http.Request) {
+        withCORS(w, r)
+        if r.Method == http.MethodOptions {
+            w.WriteHeader(http.StatusNoContent)
+            return
+        }
+        if r.Method != http.MethodGet {
+            writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
+            return
+        }
+
+        ticker := strings.TrimPrefix(r.URL.Path, "/api/v1/status/")
+        if !isValidTicker(ticker) {
+            writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ticker"})
+            return
+        }
+
+        statusCode, payload, err := proxyEngineRequest(r.Context(), http.MethodGet, engineBaseURL+"/status/"+strings.ToUpper(ticker), nil)
+        if err != nil {
+            writeJSON(w, http.StatusBadGateway, map[string]string{
+                "status":  "ERROR",
+                "message": "Unable to read sync status from the Python engine.",
+            })
+            return
+        }
+
+        writeRawJSON(w, statusCode, payload)
     })
 
     log.Printf("api-go listening on :%s", port)
@@ -132,12 +200,67 @@ func ping(url string) bool {
     return resp.StatusCode >= 200 && resp.StatusCode < 300
 }
 
+func proxyEngineRequest(ctx context.Context, method, url string, body []byte) (int, []byte, error) {
+    requestBody := io.Reader(nil)
+    if body != nil {
+        requestBody = bytes.NewReader(body)
+    }
+
+    req, err := http.NewRequestWithContext(ctx, method, url, requestBody)
+    if err != nil {
+        return 0, nil, err
+    }
+    req.Header.Set("Content-Type", "application/json")
+
+    resp, err := http.DefaultClient.Do(req)
+    if err != nil {
+        return 0, nil, err
+    }
+    defer resp.Body.Close()
+
+    payload, err := io.ReadAll(resp.Body)
+    if err != nil {
+        return 0, nil, err
+    }
+
+    if resp.StatusCode == http.StatusAccepted {
+        var acceptedPayload struct {
+            Detail syncResponse `json:"detail"`
+        }
+        if err := json.Unmarshal(payload, &acceptedPayload); err == nil && acceptedPayload.Detail.Ticker != "" {
+            normalizedPayload, marshalErr := json.Marshal(acceptedPayload.Detail)
+            if marshalErr == nil {
+                return resp.StatusCode, normalizedPayload, nil
+            }
+        }
+    }
+
+    return resp.StatusCode, payload, nil
+}
+
 func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
     w.Header().Set("Content-Type", "application/json")
     w.WriteHeader(statusCode)
     if err := json.NewEncoder(w).Encode(payload); err != nil {
         log.Printf("json encode error: %v", err)
     }
+}
+
+func writeRawJSON(w http.ResponseWriter, statusCode int, payload []byte) {
+    w.Header().Set("Content-Type", "application/json")
+    w.WriteHeader(statusCode)
+    if _, err := w.Write(payload); err != nil {
+        log.Printf("json write error: %v", err)
+    }
+}
+
+func isValidTicker(ticker string) bool {
+    normalizedTicker := strings.ToUpper(strings.TrimSpace(ticker))
+    if normalizedTicker == "" {
+        return false
+    }
+    pattern := regexp.MustCompile(`^[A-Z0-9.-]{1,15}$`)
+    return pattern.MatchString(normalizedTicker)
 }
 
 func getEnv(key, fallback string) string {

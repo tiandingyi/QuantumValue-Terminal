@@ -39,6 +39,10 @@ The repository now includes a root `docker-compose.yml` for the local stack.
    `http://localhost:8080/healthz`
 5. Check the Python engine directly:
    `http://localhost:8000/healthz`
+6. Trigger the handshake flow:
+   enter `AAPL` in the search bar on `localhost:3000`, press `Sync`, and watch the UI move from `IN_PROGRESS` to `SUCCESS`
+7. Inspect the polling endpoint directly if needed:
+   `http://localhost:8080/api/v1/status/AAPL`
 
 ## Current Layout
 

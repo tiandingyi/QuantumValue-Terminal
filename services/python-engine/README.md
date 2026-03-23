@@ -5,3 +5,5 @@ This service now contains the minimal FastAPI engine used by the local Docker st
 Current endpoints:
 
 - `GET /healthz`
+- `POST /sync/{ticker}`
+- `GET /status/{ticker}`
