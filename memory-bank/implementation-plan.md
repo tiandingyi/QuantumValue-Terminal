@@ -85,3 +85,14 @@ User Story 5: Supabase Persistence Bootstrap
     - The remote Supabase PostgreSQL instance successfully accepts the migration from the repository migration tooling.
     - A successful connection test can be performed from the Go service to the remote Supabase PostgreSQL instance with `pnpm --filter api-go db:check`.
     - After migration, a basic verification query confirms that the expected tables exist in the remote database.
+
+User Story 6: CI-Driven Supabase Initialization
+- Requirement: I want GitHub Actions to initialize the remote Supabase database when the required secrets are available.
+- Reason: So that the production persistence layer can be validated automatically and stay in sync with the repository migration set.
+- Acceptance Criteria:
+    - The CI workflow detects the required database secrets and uses them without committing any sensitive values to the repository.
+    - GitHub Actions can connect to the remote Supabase PostgreSQL instance using the configured secrets.
+    - The migration step applies the repository SQL migration set to the remote Supabase instance successfully.
+    - A post-migration verification step confirms that `companies`, `filings`, `financial_metrics`, and `sync_status` exist in the remote database.
+    - The workflow fails clearly if the connection, migration, or verification step fails.
+    - Local `docker compose` initialization remains unchanged and continues to work independently of the remote Supabase CI path.

@@ -212,6 +212,15 @@ The guide includes:
 - `gh secret set` commands for GitHub Secrets
 - a Go connection check command for the remote Supabase database
 
+GitHub Actions remote initialization uses only these GitHub Secrets:
+
+- `SUPABASE_DB_URL`
+- `SUPABASE_DIRECT_DB_URL`
+- `DATABASE_URL`
+- `MIGRATIONS_DATABASE_URL`
+
+The CI job uses those remote secrets only on pushes to `main`. Local Docker initialization continues to use `.env.docker-compose` and does not depend on GitHub Secrets.
+
 ## Current Layout
 
 - `apps/web`: Next.js 15 App Router frontend migrated from the staged dashboard template

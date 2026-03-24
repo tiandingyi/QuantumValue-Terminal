@@ -30,3 +30,7 @@
 - Finalized the initial database schema for persistence bootstrap:
   - Replaced the prototype migration with the canonical `companies`, `filings`, `financial_metrics`, and `sync_status` tables.
   - Preserved `docker compose` database initialization so the full schema can be applied locally without manual SQL.
+- Added CI scaffolding for remote Supabase initialization:
+  - Added a dedicated GitHub Actions job that runs only on pushes to `main`.
+  - Scoped the remote initialization path to GitHub Secrets only, keeping local Docker env values separate.
+  - Added migration application, Go connectivity verification, and remote table existence checks for Supabase.

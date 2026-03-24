@@ -55,3 +55,64 @@ jobs:
 
       - name: Run build checks
         run: pnpm build
+
+  supabase-init:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    needs: verify
+    env:
+      SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+      SUPABASE_DIRECT_DB_URL: ${{ secrets.SUPABASE_DIRECT_DB_URL }}
+      DATABASE_URL: ${{ secrets.DATABASE_URL }}
+      MIGRATIONS_DATABASE_URL: ${{ secrets.MIGRATIONS_DATABASE_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10.6.5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: pnpm
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.25.1"
+
+      - name: Install workspace dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Assert required Supabase secrets exist
+        run: |
+          test -n "$SUPABASE_DB_URL"
+          test -n "$SUPABASE_DIRECT_DB_URL"
+          test -n "$DATABASE_URL"
+          test -n "$MIGRATIONS_DATABASE_URL"
+
+      - name: Install migration CLI
+        run: go install github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.2
+
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Apply remote Supabase migrations
+        run: |
+          "$HOME/go/bin/migrate" \
+            -path db/migrations \
+            -database "$MIGRATIONS_DATABASE_URL" \
+            up
+
+      - name: Verify Go can connect to Supabase
+        run: pnpm --filter api-go db:check
+
+      - name: Verify required remote tables exist
+        run: |
+          table_count="$(psql "$SUPABASE_DB_URL" -tAc "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('companies', 'filings', 'financial_metrics', 'sync_status');")"
+          test "$table_count" = "4"
