@@ -45,8 +45,7 @@ jobs:
 
       - name: Validate Docker Compose syntax
         run: |
-          cp .env.example .env
-          docker compose --env-file .env.example config > /dev/null
+          docker compose --env-file .env.docker-compose config > /dev/null
 
       - name: Run tests
         run: pnpm test

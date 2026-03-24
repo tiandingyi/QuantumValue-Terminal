@@ -38,9 +38,10 @@ This repository now includes the initial `pnpm` workspace and Turborepo wiring f
 The repository now includes a root `docker-compose.yml` for the local stack.
 
 1. Create a local env file from the template:
-   `cp .env.example .env`
+   Docker uses the committed `.env.docker-compose` defaults directly.
 2. Start the stack:
    `docker compose up --build`
+   If your local Docker installation does not support the `docker compose` subcommand, use `docker-compose up --build` instead.
 3. Open the frontend:
    `http://localhost:3000`
 4. Check the Go API directly:
@@ -52,15 +53,164 @@ The repository now includes a root `docker-compose.yml` for the local stack.
 7. Inspect the polling endpoint directly if needed:
    `http://localhost:8080/api/v1/status/AAPL`
 
+## Local Database Initialization Check
+
+Use this section to verify that `docker compose` brings up PostgreSQL and applies the current migration set locally.
+
+Required initialization step:
+
+```bash
+docker compose up --build postgres db-migrate
+```
+
+If your machine only supports the legacy Compose command, use:
+
+```bash
+docker-compose up --build postgres db-migrate
+```
+
+What it does:
+
+- Starts the local PostgreSQL container
+- Starts the migration container
+- Applies the current migration files to the local database
+
+Optional verification commands:
+
+1. Show the current tables:
+
+```bash
+docker compose exec postgres psql -U quantumvalue -d quantumvalue -c "\dt"
+```
+
+Legacy command equivalent:
+
+```bash
+docker-compose exec postgres psql -U quantumvalue -d quantumvalue -c "\dt"
+```
+
+What it does:
+
+- Connects to the running local PostgreSQL container
+- Opens `psql` against the `quantumvalue` database
+- Prints the currently visible tables
+
+2. Show the public schema table names in sorted order:
+
+```bash
+docker compose exec postgres psql -U quantumvalue -d quantumvalue -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
+```
+
+Legacy command equivalent:
+
+```bash
+docker-compose exec postgres psql -U quantumvalue -d quantumvalue -c "SELECT tablename FROM pg_tables WHERE schemaname = 'public' ORDER BY tablename;"
+```
+
+What it does:
+
+- Queries PostgreSQL system metadata
+- Prints only table names from the `public` schema
+- Gives a cleaner confirmation than `\dt`
+
+3. Inspect the `companies` table:
+
+```bash
+docker compose exec postgres psql -U quantumvalue -d quantumvalue -c "\d companies"
+```
+
+Legacy command equivalent:
+
+```bash
+docker-compose exec postgres psql -U quantumvalue -d quantumvalue -c "\d companies"
+```
+
+What it does:
+
+- Shows the `companies` columns
+- Shows its primary key, unique constraints, and indexes
+
+4. Inspect the `filings` table:
+
+```bash
+docker compose exec postgres psql -U quantumvalue -d quantumvalue -c "\d filings"
+```
+
+Legacy command equivalent:
+
+```bash
+docker-compose exec postgres psql -U quantumvalue -d quantumvalue -c "\d filings"
+```
+
+What it does:
+
+- Shows the `filings` columns
+- Shows the foreign key back to `companies`
+- Shows its unique constraints and indexes
+
+5. Inspect the `financial_metrics` table:
+
+```bash
+docker compose exec postgres psql -U quantumvalue -d quantumvalue -c "\d financial_metrics"
+```
+
+Legacy command equivalent:
+
+```bash
+docker-compose exec postgres psql -U quantumvalue -d quantumvalue -c "\d financial_metrics"
+```
+
+What it does:
+
+- Shows the `financial_metrics` columns
+- Shows the `JSONB` metrics field
+- Shows the one-to-one relationship to `filings`
+
+6. Inspect the `sync_status` table:
+
+```bash
+docker compose exec postgres psql -U quantumvalue -d quantumvalue -c "\d sync_status"
+```
+
+Legacy command equivalent:
+
+```bash
+docker-compose exec postgres psql -U quantumvalue -d quantumvalue -c "\d sync_status"
+```
+
+What it does:
+
+- Shows the `sync_status` columns
+- Shows the foreign key back to `companies`
+- Shows the sync-tracking index
+
+Expected tables:
+
+- `companies`
+- `filings`
+- `financial_metrics`
+- `sync_status`
+
 ## CI
 
-GitHub Actions CI is defined in [ci.yml](/Users/dingyitian/Desktop/QuantumValue-Terminal/.github/workflows/ci.yml).
+GitHub Actions CI is defined in [`ci.yml`](.github/workflows/ci.yml).
 
 - Triggers on pushes to `main`
 - Triggers on pull requests
 - Runs `pnpm test`, `pnpm lint`, and `pnpm build`
 - Verifies Node, Go, and Python service builds inside CI
 - Validates the Docker Compose configuration
+
+## Supabase Provisioning
+
+Provision the Supabase project manually in the official dashboard, then follow the terminal-first secret setup guide in [`infra/supabase-setup.md`](infra/supabase-setup.md).
+
+The guide includes:
+
+- `export` commands for manually entering only sensitive Supabase values
+- a terminal command to append the non-secret local defaults and current exported values into `.env`
+- `gh secret set` commands for GitHub Secrets
+- a Go connection check command for the remote Supabase database
 
 ## Current Layout
 

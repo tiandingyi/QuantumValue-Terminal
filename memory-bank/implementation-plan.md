@@ -40,3 +40,48 @@ User Story 4: Automated CI Pipeline
     - The workflow provisions the required runtimes for Node.js, Go, and Python so all three services can be validated in CI.
     - Frontend, Go, and Python build checks all pass in CI, and the Docker Compose configuration is syntax-validated.
     - Any failed test, lint, or build step causes the workflow to fail.
+
+User Story 5: Supabase Persistence Bootstrap
+- Requirement: I want to provision the Supabase persistence layer and apply the initial production schema for filings, metrics, and sync tracking.
+- Reason: So that the Go Gateway and Python Analysis Engine can connect to a persistent PostgreSQL instance and store structured company, filing, metric, and sync state data in both development and production environments.
+- Final Schema Design:
+    - `companies`
+      - `id UUID PRIMARY KEY` - Internal system identifier
+      - `ticker VARCHAR UNIQUE NOT NULL` - Stock symbol (for example `AAPL`) used as the primary lookup handle
+      - `cik CHAR(10) UNIQUE NOT NULL` - 10-digit SEC identifier that preserves leading zeros
+      - `name VARCHAR NOT NULL` - Full legal name of the corporation
+      - `sector VARCHAR NULL` - Broad economic sector (for example `Technology`)
+      - `is_active BOOLEAN NOT NULL DEFAULT TRUE` - Enables or disables automated background scraping for the company
+      - `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` - Timestamp when the company row was created
+      - `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` - Timestamp when the company row was last updated
+    - `filings`
+      - `id UUID PRIMARY KEY` - Unique filing document identifier
+      - `company_id UUID NOT NULL REFERENCES companies(id)` - Reference to the parent company in `companies`
+      - `type VARCHAR NOT NULL` - Report type (for example `10-K` or `10-Q`)
+      - `fiscal_year INT NOT NULL` - The calendar year this report represents
+      - `period VARCHAR NOT NULL` - The fiscal period label (for example `FY`, `Q1`, `Q2`)
+      - `accession_num VARCHAR UNIQUE NOT NULL` - SEC official receipt number used for deduplication
+      - `filed_at DATE NOT NULL` - Date the report was officially published
+      - `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` - Timestamp when this filing row was ingested
+    - `financial_metrics`
+      - `id UUID PRIMARY KEY` - Unique data record identifier
+      - `filing_id UUID UNIQUE NOT NULL REFERENCES filings(id)` - Reference to `filings`, one metrics row per filing
+      - `metrics JSONB NOT NULL` - Super-dictionary packing all parsed financial data (revenue, EPS, assets, liabilities, and more)
+      - `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` - Timestamp when this metrics payload was ingested
+    - `sync_status`
+      - `id BIGSERIAL PRIMARY KEY` - Auto-incrementing log identifier for sync tracking
+      - `company_id UUID NOT NULL REFERENCES companies(id)` - Reference to the company currently being processed
+      - `task_type VARCHAR NOT NULL` - Current sync task type (for example `SCRAPE`, `PARSE`, `UPSERT`)
+      - `status VARCHAR NOT NULL` - Task state (for example `PENDING`, `IN_PROGRESS`, `SUCCESS`, `FAILED`)
+      - `last_error TEXT NULL` - Detailed error message or stack trace when a sync task fails
+      - `created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` - Timestamp when the sync status row was created
+      - `updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()` - Timestamp when the sync status row was last updated
+- Acceptance Criteria:
+    - The Supabase project is created manually through the official dashboard.
+    - Only sensitive remote database values are entered manually through terminal `export` commands and then persisted into the local `.env`, while non-secret defaults remain committed in repo-managed env files.
+    - The same sensitive values can be copied into GitHub Secrets through terminal commands without committing them to the repository.
+    - Database initialization must remain runnable through `docker compose` locally, so a teammate can bring up the local PostgreSQL container and have the current migration set applied end to end without any manual SQL steps.
+    - The initial migration creates `companies`, `filings`, `financial_metrics`, and `sync_status` exactly as defined above, including primary keys, foreign keys, unique constraints, and timestamps.
+    - The remote Supabase PostgreSQL instance successfully accepts the migration from the repository migration tooling.
+    - A successful connection test can be performed from the Go service to the remote Supabase PostgreSQL instance with `pnpm --filter api-go db:check`.
+    - After migration, a basic verification query confirms that the expected tables exist in the remote database.

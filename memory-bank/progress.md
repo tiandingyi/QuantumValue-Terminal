@@ -23,3 +23,10 @@
 - Standardized runtime and frontend tooling versions:
   - Locked the project baseline to Node.js 22, pnpm 10, Go 1.25, Python 3.12, and Tailwind CSS 4.
   - Migrated the web app away from a Tailwind 3 config file to Tailwind 4 CSS-first theme tokens and PostCSS plugin wiring.
+- Added Supabase provisioning scaffolding:
+  - Split non-secret local defaults into committed env templates and reserved manual terminal exports for sensitive remote database values.
+  - Added a terminal-first provisioning runbook for local `.env` and GitHub Secrets setup.
+  - Added a Go `db:check` command to verify connectivity to a remote Supabase PostgreSQL instance.
+- Finalized the initial database schema for persistence bootstrap:
+  - Replaced the prototype migration with the canonical `companies`, `filings`, `financial_metrics`, and `sync_status` tables.
+  - Preserved `docker compose` database initialization so the full schema can be applied locally without manual SQL.

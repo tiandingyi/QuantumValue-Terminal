@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "build": "go build ./cmd/api",
-    "lint": "test -z \"$(gofmt -l cmd/api/*.go)\"",
+    "db:check": "go run ./cmd/dbcheck",
+    "lint": "test -z \"$(find cmd -name '*.go' -print0 | xargs -0 gofmt -l)\"",
     "test": "go test ./..."
   }
 }
