@@ -62,9 +62,8 @@ jobs:
     needs: verify
     env:
       SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
-      SUPABASE_DIRECT_DB_URL: ${{ secrets.SUPABASE_DIRECT_DB_URL }}
-      DATABASE_URL: ${{ secrets.DATABASE_URL }}
-      MIGRATIONS_DATABASE_URL: ${{ secrets.MIGRATIONS_DATABASE_URL }}
+      DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+      MIGRATIONS_DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
 
     steps:
       - name: Checkout repository
@@ -92,9 +91,6 @@ jobs:
       - name: Assert required Supabase secrets exist
         run: |
           test -n "$SUPABASE_DB_URL"
-          test -n "$SUPABASE_DIRECT_DB_URL"
-          test -n "$DATABASE_URL"
-          test -n "$MIGRATIONS_DATABASE_URL"
 
       - name: Install migration CLI
         run: go install github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.2

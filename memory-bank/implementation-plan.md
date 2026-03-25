@@ -91,6 +91,7 @@ User Story 6: CI-Driven Supabase Initialization
 - Reason: So that the production persistence layer can be validated automatically and stay in sync with the repository migration set.
 - Acceptance Criteria:
     - The CI workflow detects the required database secrets and uses them without committing any sensitive values to the repository.
+    - The required CI secret is the remote Supabase `Supavisor session mode` connection string, exposed as `SUPABASE_DB_URL`; any direct connection secret remains optional for manual troubleshooting only.
     - GitHub Actions can connect to the remote Supabase PostgreSQL instance using the configured secrets.
     - The migration step applies the repository SQL migration set to the remote Supabase instance successfully.
     - A post-migration verification step confirms that `companies`, `filings`, `financial_metrics`, and `sync_status` exist in the remote database.

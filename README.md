@@ -215,11 +215,12 @@ The guide includes:
 GitHub Actions remote initialization uses only these GitHub Secrets:
 
 - `SUPABASE_DB_URL`
-- `SUPABASE_DIRECT_DB_URL`
-- `DATABASE_URL`
-- `MIGRATIONS_DATABASE_URL`
 
-The CI job uses those remote secrets only on pushes to `main`. Local Docker initialization continues to use `.env.docker-compose` and does not depend on GitHub Secrets.
+Optional manual troubleshooting can also keep:
+
+- `SUPABASE_DIRECT_DB_URL`
+
+The CI job uses the remote session-mode Supabase connection on pushes to `main` for migration, Go connectivity verification, and table existence checks. Local Docker initialization continues to use `.env.docker-compose` and does not depend on GitHub Secrets.
 
 ## Current Layout
 

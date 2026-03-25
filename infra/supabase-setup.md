@@ -14,12 +14,18 @@ Paste these commands into your terminal and replace the placeholder values yours
 Only sensitive values are exported here.
 
 ```bash
-export SUPABASE_DB_URL='postgresql://postgres.<project-ref>:<db-password>@<pooler-host>:6543/postgres?sslmode=require'
-export SUPABASE_DIRECT_DB_URL='postgresql://postgres.<project-ref>:<db-password>@<direct-host>:5432/postgres?sslmode=require'
+export SUPABASE_DB_URL='postgresql://postgres.<project-ref>:<db-password>@<session-pooler-host>:5432/postgres?sslmode=require'
+export SUPABASE_DIRECT_DB_URL='postgresql://postgres:<db-password>@<direct-host>:5432/postgres?sslmode=require'
 
 export DATABASE_URL="$SUPABASE_DB_URL"
-export MIGRATIONS_DATABASE_URL="$SUPABASE_DIRECT_DB_URL"
+export MIGRATIONS_DATABASE_URL="${SUPABASE_DIRECT_DB_URL:-$SUPABASE_DB_URL}"
 ```
+
+Notes:
+
+- `SUPABASE_DB_URL` should use the Supabase `Supavisor session mode` connection string.
+- `SUPABASE_DIRECT_DB_URL` is optional for manual troubleshooting and direct-native tools.
+- GitHub Actions uses `SUPABASE_DB_URL` for remote initialization because the hosted runner path is more reliable with the session-mode pooler than with the IPv6-only direct host.
 
 ## 3. Persist the current exported values into the local `.env`
 
@@ -40,11 +46,16 @@ EOF
 
 Use the GitHub CLI after replacing the placeholder values via `export` above.
 
+Required:
+
 ```bash
 printf '%s' "$SUPABASE_DB_URL" | gh secret set SUPABASE_DB_URL
+```
+
+Optional:
+
+```bash
 printf '%s' "$SUPABASE_DIRECT_DB_URL" | gh secret set SUPABASE_DIRECT_DB_URL
-printf '%s' "$DATABASE_URL" | gh secret set DATABASE_URL
-printf '%s' "$MIGRATIONS_DATABASE_URL" | gh secret set MIGRATIONS_DATABASE_URL
 ```
 
 ## 5. Test the Go connection to the remote Supabase instance

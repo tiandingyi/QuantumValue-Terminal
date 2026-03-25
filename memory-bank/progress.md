@@ -34,3 +34,6 @@
   - Added a dedicated GitHub Actions job that runs only on pushes to `main`.
   - Scoped the remote initialization path to GitHub Secrets only, keeping local Docker env values separate.
   - Added migration application, Go connectivity verification, and remote table existence checks for Supabase.
+- Tightened the remote Supabase CI path to the session-mode connection:
+  - Reduced the required GitHub Actions secret set to `SUPABASE_DB_URL`.
+  - Pointed CI migration and verification steps at the session pooler so hosted runners do not depend on the direct IPv6-only database host.
