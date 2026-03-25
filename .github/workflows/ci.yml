@@ -93,7 +93,7 @@ jobs:
           test -n "$SUPABASE_DB_URL"
 
       - name: Install migration CLI
-        run: go install github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.2
+        run: go install -tags 'postgres' github.com/golang-migrate/migrate/v4/cmd/migrate@v4.18.2
 
       - name: Install PostgreSQL client
         run: sudo apt-get update && sudo apt-get install -y postgresql-client
