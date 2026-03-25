@@ -110,5 +110,6 @@ jobs:
 
       - name: Verify required remote tables exist
         run: |
-          table_count="$(psql "$SUPABASE_DB_URL" -tAc "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('companies', 'filings', 'financial_metrics', 'sync_status');")"
+          sanitized_psql_url="$(printf '%s' "$SUPABASE_DB_URL" | sed -E 's/\?pgbouncer=true&/?/; s/&pgbouncer=true//; s/\?pgbouncer=true$//')"
+          table_count="$(psql "$sanitized_psql_url" -tAc "SELECT COUNT(*) FROM pg_tables WHERE schemaname = 'public' AND tablename IN ('companies', 'filings', 'financial_metrics', 'sync_status');")"
           test "$table_count" = "4"
