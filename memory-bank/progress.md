@@ -37,3 +37,10 @@
 - Tightened the remote Supabase CI path to the session-mode connection:
   - Reduced the required GitHub Actions secret set to `SUPABASE_DB_URL`.
   - Pointed CI migration and verification steps at the session pooler so hosted runners do not depend on the direct IPv6-only database host.
+
+## 2026-03-30
+
+- Realigned the Go gateway implementation with the documented architecture:
+  - Replaced the temporary `net/http` router with a real Gin router in `services/go-gateway`.
+  - Added route-level Go tests covering health, CORS preflight, and invalid ticker validation.
+  - Updated the technical stack notes so the documented API layer matches the running code.

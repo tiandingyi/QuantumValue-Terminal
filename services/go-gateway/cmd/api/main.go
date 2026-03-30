@@ -11,6 +11,8 @@ import (
 	"regexp"
 	"strings"
 	"time"
+
+	"github.com/gin-gonic/gin"
 )
 
 type serviceStatus struct {
@@ -35,29 +37,29 @@ type syncResponse struct {
 func main() {
 	port := getEnv("PORT", "8080")
 	engineBaseURL := getEnv("ENGINE_BASE_URL", "http://localhost:8000")
-	mux := http.NewServeMux()
+	router := setupRouter(engineBaseURL)
 
-	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) {
-		withCORS(w, r)
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
+	log.Printf("api-go listening on :%s", port)
+	if err := router.Run(":" + port); err != nil {
+		log.Fatal(err)
+	}
+}
 
-		writeJSON(w, http.StatusOK, map[string]string{
+func setupRouter(engineBaseURL string) *gin.Engine {
+	gin.SetMode(gin.ReleaseMode)
+
+	router := gin.New()
+	router.Use(gin.Logger(), gin.Recovery(), corsMiddleware())
+
+	router.GET("/healthz", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{
 			"service": "api-go",
 			"status":  "ok",
 			"engine":  engineBaseURL,
 		})
 	})
 
-	mux.HandleFunc("/api/v1/handshake", func(w http.ResponseWriter, r *http.Request) {
-		withCORS(w, r)
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-
+	router.GET("/api/v1/handshake", func(c *gin.Context) {
 		statuses := []serviceStatus{
 			{
 				Name:      "api-go",
@@ -79,85 +81,72 @@ func main() {
 			}
 		}
 
-		writeJSON(w, http.StatusOK, handshakeResponse{
+		c.JSON(http.StatusOK, handshakeResponse{
 			Status:    overall,
 			Timestamp: time.Now().UTC().Format(time.RFC3339),
 			Services:  statuses,
 		})
 	})
 
-	mux.HandleFunc("/api/v1/sync/", func(w http.ResponseWriter, r *http.Request) {
-		withCORS(w, r)
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		if r.Method != http.MethodPost {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-			return
-		}
-
-		ticker := strings.TrimPrefix(r.URL.Path, "/api/v1/sync/")
+	router.POST("/api/v1/sync/:ticker", func(c *gin.Context) {
+		ticker := c.Param("ticker")
 		if !isValidTicker(ticker) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ticker"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticker"})
 			return
 		}
 
-		statusCode, payload, err := proxyEngineRequest(r.Context(), http.MethodPost, engineBaseURL+"/sync/"+strings.ToUpper(ticker), nil)
+		statusCode, payload, err := proxyEngineRequest(c.Request.Context(), http.MethodPost, engineBaseURL+"/sync/"+strings.ToUpper(ticker), nil)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{
+			c.JSON(http.StatusBadGateway, gin.H{
 				"status":  "ERROR",
 				"message": "Python engine is unavailable.",
 			})
 			return
 		}
 
-		writeRawJSON(w, statusCode, payload)
+		c.Data(statusCode, "application/json", payload)
 	})
 
-	mux.HandleFunc("/api/v1/status/", func(w http.ResponseWriter, r *http.Request) {
-		withCORS(w, r)
-		if r.Method == http.MethodOptions {
-			w.WriteHeader(http.StatusNoContent)
-			return
-		}
-		if r.Method != http.MethodGet {
-			writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method not allowed"})
-			return
-		}
-
-		ticker := strings.TrimPrefix(r.URL.Path, "/api/v1/status/")
+	router.GET("/api/v1/status/:ticker", func(c *gin.Context) {
+		ticker := c.Param("ticker")
 		if !isValidTicker(ticker) {
-			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid ticker"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticker"})
 			return
 		}
 
-		statusCode, payload, err := proxyEngineRequest(r.Context(), http.MethodGet, engineBaseURL+"/status/"+strings.ToUpper(ticker), nil)
+		statusCode, payload, err := proxyEngineRequest(c.Request.Context(), http.MethodGet, engineBaseURL+"/status/"+strings.ToUpper(ticker), nil)
 		if err != nil {
-			writeJSON(w, http.StatusBadGateway, map[string]string{
+			c.JSON(http.StatusBadGateway, gin.H{
 				"status":  "ERROR",
 				"message": "Unable to read sync status from the Python engine.",
 			})
 			return
 		}
 
-		writeRawJSON(w, statusCode, payload)
+		c.Data(statusCode, "application/json", payload)
 	})
 
-	log.Printf("api-go listening on :%s", port)
-	if err := http.ListenAndServe(":"+port, mux); err != nil {
-		log.Fatal(err)
-	}
+	return router
 }
 
-func withCORS(w http.ResponseWriter, r *http.Request) {
-	origin := r.Header.Get("Origin")
-	if origin != "" && isAllowedOrigin(origin) {
-		w.Header().Set("Access-Control-Allow-Origin", origin)
-		w.Header().Set("Vary", "Origin")
+func corsMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		origin := c.GetHeader("Origin")
+		if origin != "" && isAllowedOrigin(origin) {
+			c.Header("Access-Control-Allow-Origin", origin)
+			c.Header("Vary", "Origin")
+		}
+		c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept")
+
+		if c.Request.Method == http.MethodOptions {
+			c.Status(http.StatusNoContent)
+			c.Abort()
+			return
+		}
+
+		c.Next()
 	}
-	w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-	w.Header().Set("Access-Control-Allow-Headers", "Origin, Content-Type, Accept")
 }
 
 func allowedOrigins() []string {
@@ -236,22 +225,6 @@ func proxyEngineRequest(ctx context.Context, method, url string, body []byte) (i
 	}
 
 	return resp.StatusCode, payload, nil
-}
-
-func writeJSON(w http.ResponseWriter, statusCode int, payload any) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		log.Printf("json encode error: %v", err)
-	}
-}
-
-func writeRawJSON(w http.ResponseWriter, statusCode int, payload []byte) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(statusCode)
-	if _, err := w.Write(payload); err != nil {
-		log.Printf("json write error: %v", err)
-	}
 }
 
 func isValidTicker(ticker string) bool {

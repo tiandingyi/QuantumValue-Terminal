@@ -1,6 +1,6 @@
 - **Monorepo Management:** Turborepo + pnpm Workspaces (`pnpm` 10 on Node.js 22).
 - **Frontend:** Next.js 15 (App Router) + Tailwind CSS 4.
-- **API Gateway (Go):** Go 1.25 + standard library HTTP layer for the current handshake phase, with room to add Gin-based routing as the service grows.
+- **API Gateway (Go):** Go 1.25 + Gin for routing, request handling, and local service orchestration during the handshake phase and beyond.
 - **Analysis Engine (Python):** Python 3.12 + FastAPI + SQLAlchemy 2.0 (Dedicated to SEC EDGAR data scraping, Pydantic validation, and read-only ORM mapping).
 - **Database & Schema Control:**
   - **Engine:** Supabase PostgreSQL (Using JSONB wide-format storage and GIN indexing for large financial time-series datasets).
