@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	gincors "github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 )
 
@@ -49,7 +50,8 @@ func setupRouter(engineBaseURL string) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.New()
-	router.Use(gin.Logger(), gin.Recovery(), corsMiddleware())
+	// Install the shared middleware stack before registering API routes.
+	router.Use(gin.Logger(), gin.Recovery(), gincors.New(buildCORSConfig()))
 
 	router.GET("/healthz", func(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{
@@ -60,6 +62,7 @@ func setupRouter(engineBaseURL string) *gin.Engine {
 	})
 
 	router.GET("/api/v1/handshake", func(c *gin.Context) {
+		// Report both the gateway and Python engine reachability in a single handshake payload.
 		statuses := []serviceStatus{
 			{
 				Name:      "api-go",
@@ -89,6 +92,7 @@ func setupRouter(engineBaseURL string) *gin.Engine {
 	})
 
 	router.POST("/api/v1/sync/:ticker", func(c *gin.Context) {
+		// Validate and normalize tickers before proxying the sync request downstream.
 		ticker := c.Param("ticker")
 		if !isValidTicker(ticker) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticker"})
@@ -108,6 +112,7 @@ func setupRouter(engineBaseURL string) *gin.Engine {
 	})
 
 	router.GET("/api/v1/status/:ticker", func(c *gin.Context) {
+		// Keep status polling aligned with the same ticker validation rules as sync requests.
 		ticker := c.Param("ticker")
 		if !isValidTicker(ticker) {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticker"})
@@ -129,23 +134,13 @@ func setupRouter(engineBaseURL string) *gin.Engine {
 	return router
 }
 
-func corsMiddleware() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		origin := c.GetHeader("Origin")
-		if origin != "" && isAllowedOrigin(origin) {
-			c.Header("Access-Control-Allow-Origin", origin)
-			c.Header("Vary", "Origin")
-		}
-		c.Header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-		c.Header("Access-Control-Allow-Headers", "Origin, Content-Type, Accept")
-
-		if c.Request.Method == http.MethodOptions {
-			c.Status(http.StatusNoContent)
-			c.Abort()
-			return
-		}
-
-		c.Next()
+func buildCORSConfig() gincors.Config {
+	// Mirror the repo-managed origin allowlist so Docker and local browser flows stay in sync.
+	return gincors.Config{
+		AllowOrigins:     allowedOrigins(),
+		AllowMethods:     []string{http.MethodGet, http.MethodPost, http.MethodOptions},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Accept"},
+		AllowCredentials: false,
 	}
 }
 
@@ -213,6 +208,7 @@ func proxyEngineRequest(ctx context.Context, method, url string, body []byte) (i
 	}
 
 	if resp.StatusCode == http.StatusAccepted {
+		// Flatten the Python engine's accepted payload so the frontend receives a stable contract.
 		var acceptedPayload struct {
 			Detail syncResponse `json:"detail"`
 		}

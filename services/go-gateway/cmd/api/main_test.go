@@ -8,6 +8,7 @@ import (
 )
 
 func TestIsValidTicker(t *testing.T) {
+	// Keep ticker validation tight because both sync and polling routes depend on it.
 	validTickers := []string{"AAPL", "BRK.B", "0700.HK", "MSFT"}
 	invalidTickers := []string{"", "BAD TICKER", "###", "ticker-with-way-too-many-characters"}
 
@@ -46,6 +47,7 @@ func TestHealthzReturnsConfiguredEngine(t *testing.T) {
 }
 
 func TestCorsPreflightReturnsNoContent(t *testing.T) {
+	// Confirm the shared CORS configuration still handles browser preflight requests.
 	router := setupRouter("http://engine.test")
 	request := httptest.NewRequest(http.MethodOptions, "/api/v1/handshake", nil)
 	request.Header.Set("Origin", "http://localhost:3000")
