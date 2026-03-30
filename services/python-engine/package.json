@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "PYTHONPYCACHEPREFIX=.pycache python3 -m py_compile app/main.py",
+    "build": "PYTHONPYCACHEPREFIX=.pycache python3 -m py_compile app/main.py app/providers/us_provider.py scripts/sec_test.py",
     "lint": "PYTHONPYCACHEPREFIX=.pycache python3 -m compileall app tests",
     "test": "python3 -m pytest"
   }

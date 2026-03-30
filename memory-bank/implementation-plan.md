@@ -97,3 +97,37 @@ User Story 6: CI-Driven Supabase Initialization
     - A post-migration verification step confirms that `companies`, `filings`, `financial_metrics`, and `sync_status` exist in the remote database.
     - The workflow fails clearly if the connection, migration, or verification step fails.
     - Local `docker compose` initialization remains unchanged and continues to work independently of the remote Supabase CI path.
+
+### **Sprint 2: The SEC Harvester (Python) - User Stories**
+
+---
+
+**User Story 1: SEC EDGAR API Integration**
+
+**Title:** SEC EDGAR API Basic Integration & Company Data Fetching (with Ticker Support)
+
+**Role:** Data Engineer
+**Requirement:** I want to implement a Python `US_Provider` module that allows users to input standard US stock tickers, automatically converts them to their corresponding CIKs, and fetches the raw "Company Facts" and "Submissions" JSON data from the SEC EDGAR API.
+**Reason:** To provide a reliable, legally compliant, and foundational raw data source for subsequent quantitative analysis, data flattening, and "financial archaeology."
+
+**Acceptance Criteria (Definition of Done):**
+
+- **AC1: Independent Local Verification (POC First)**
+    - Before integrating any code into the FastAPI backend engine, a standalone Python test script (e.g., `sec_test.py`) must be delivered.
+    - **Execution:** The script must run successfully in a local Python 3.x environment using `python sec_test.py` (with the `requests` library installed).
+    - **Definition of Success:**
+        1. **No Blocking Errors:** The script executes fully without throwing `403 Forbidden` (verifying UA and rate limits) or `404 Not Found` (verifying Ticker-to-CIK mapping).
+        2. **Basic Validation:** Successfully prints the correct English entity name for a hardcoded target ticker (e.g., printing "NVIDIA CORP" for `NVDA`).
+        3. **Deep Data Extraction:** Successfully extracts and prints at least one specific financial metric from the deeply nested JSON tree (e.g., clearly outputting the exact monetary value and end date of the latest "Assets").
+- **AC2: Automated Ticker-to-CIK Mapping**
+    - The system must call the SEC's `company_tickers.json` endpoint to map user-input tickers (e.g., `AAPL`) to their base CIKs (e.g., `320193`).
+    - The input must be case-insensitive (`aapl` and `AAPL` must both be valid).
+- **AC3: CIK Formatting & Endpoint Integration**
+    - Prior to making data requests, the system must automatically pad the base CIK to a strict 10-digit string format (e.g., converting `320193` to `0000320193`).
+    - Successfully retrieve data from the Submissions endpoint (`/submissions/CIK{cik}.json`) and the Company Facts endpoint (`/api/xbrl/companyfacts/CIK{cik}.json`).
+- **AC4: Mandatory Compliance Headers (SEC Fair Access)**
+    - All outbound HTTP requests *must* carry the realistic, compliant User-Agent header: `Dingyi Quant Research data-ops@dingyi-analytics.net`. Failure to include this fails the AC.
+    - Headers must also include `Accept-Encoding: gzip, deflate` to optimize payload transmission.
+- **AC5: API Rate Limiting**
+    - The module must implement an internal throttling mechanism (e.g., a `time.sleep` of 0.15 seconds per request in a single-threaded context).
+    - Outbound requests must strictly remain under the SEC's limit of 10 requests per second to prevent triggering circuit breakers and IP bans.

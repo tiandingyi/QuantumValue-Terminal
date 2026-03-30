@@ -44,3 +44,9 @@
   - Replaced the temporary `net/http` router with a real Gin router in `services/go-gateway`.
   - Added route-level Go tests covering health, CORS preflight, and invalid ticker validation.
   - Updated the technical stack notes so the documented API layer matches the running code.
+- Completed Sprint 2 User Story 1 SEC EDGAR foundation:
+  - Added a reusable Python `USProvider` that resolves case-insensitive tickers through SEC `company_tickers.json`, pads CIKs to 10 digits, and fetches both `submissions` and `companyfacts`.
+  - Enforced SEC Fair Access headers with the required `User-Agent` and `Accept-Encoding`, plus an internal 0.15 second throttle to stay below 10 requests per second.
+  - Added a standalone proof-of-concept script at `services/python-engine/scripts/sec_test.py` and verified it live against SEC data for `NVDA`, including latest `Assets` extraction.
+  - Upgraded the FastAPI sync flow so background jobs now perform real SEC fetches and expose a structured `latest_assets` summary in sync status details.
+  - Added Python tests covering ticker mapping, CIK padding, header usage, throttling behavior, and async sync success/failure handling.
