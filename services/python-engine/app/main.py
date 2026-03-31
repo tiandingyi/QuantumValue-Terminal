@@ -1,4 +1,5 @@
 import asyncio
+import logging
 import os
 from typing import Any
 from datetime import datetime, timezone
@@ -8,7 +9,13 @@ import requests
 from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 
+from app.persistence.factory import build_persistence_store
+from app.persistence.filing_metadata import extract_latest_supported_filing
+from app.providers.sec_types import CompanyDataBundle
 from app.providers.us_provider import USProvider
+
+
+logger = logging.getLogger(__name__)
 
 
 class SyncResponse(BaseModel):
@@ -47,15 +54,41 @@ class SyncState:
 app = FastAPI(title="QuantumValue Engine", version="0.1.0")
 sync_state = SyncState()
 provider_factory = USProvider
+persistence_store_factory = lambda: build_persistence_store(os.getenv("DATABASE_URL"))
 
 
 async def finish_sync(ticker: str) -> None:
     await asyncio.sleep(0)
     provider = provider_factory()
+    company = None
 
     try:
-        bundle = await asyncio.to_thread(provider.fetch_company_data, ticker)
+        store = persistence_store_factory()
+        company = await asyncio.to_thread(provider.resolve_ticker, ticker)
+        if store is not None:
+            await asyncio.to_thread(store.upsert_sync_status, company, "SEC_SYNC", "PENDING", None)
+            await asyncio.to_thread(store.upsert_sync_status, company, "SEC_SYNC", "IN_PROGRESS", None)
+
+        submissions = await asyncio.to_thread(provider.get_submissions, company.cik)
+        company_facts = await asyncio.to_thread(provider.get_company_facts, company.cik)
+        bundle = CompanyDataBundle(company=company, submissions=submissions, company_facts=company_facts)
+
         latest_assets = provider.extract_latest_metric(bundle.company_facts, "Assets")
+        base_metrics = provider.parse_financial_metric(bundle.company_facts)
+        derived_metrics = provider.extract_requested_financials(bundle.company_facts)
+        persistence_details: Optional[dict[str, Any]] = None
+
+        if store is not None:
+            filing_metadata = extract_latest_supported_filing(bundle.submissions, bundle.company.cik)
+            persistence_details = await asyncio.to_thread(
+                store.persist_filing_bundle,
+                bundle.company,
+                filing_metadata,
+                base_metrics,
+                derived_metrics,
+            )
+            await asyncio.to_thread(store.upsert_sync_status, bundle.company, "SEC_SYNC", "SUCCESS", None)
+
         sync_state.set(
             ticker,
             "SUCCESS",
@@ -63,6 +96,7 @@ async def finish_sync(ticker: str) -> None:
             details={
                 "company_name": bundle.company.name,
                 "cik": bundle.company.cik,
+                "persistence": persistence_details or {"status": "skipped"},
                 "latest_assets": {
                     "value": latest_assets["val"],
                     "unit": latest_assets["unit"],
@@ -72,7 +106,15 @@ async def finish_sync(ticker: str) -> None:
                 },
             },
         )
-    except (requests.RequestException, ValueError) as exc:
+    except Exception as exc:
+        store = None
+        try:
+            store = persistence_store_factory()
+        except Exception:
+            store = None
+        if store is not None and company is not None:
+            await asyncio.to_thread(store.upsert_sync_status, company, "SEC_SYNC", "FAILURE", str(exc))
+        logger.exception("SEC EDGAR sync failed for %s", ticker)
         sync_state.set(
             ticker,
             "FAILED",

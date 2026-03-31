@@ -11,7 +11,8 @@ Current endpoints:
 Current SEC behavior:
 
 - `POST /sync/{ticker}` starts an asynchronous SEC fetch for ticker-to-CIK resolution plus `submissions` and `companyfacts`.
-- `GET /status/{ticker}` returns `IN_PROGRESS`, `SUCCESS`, or `FAILED`, and successful responses include a latest `Assets` summary in `details`.
+- `GET /status/{ticker}` returns `IN_PROGRESS`, `SUCCESS`, or `FAILED`, and successful responses include a latest `Assets` summary plus persistence details in `details`.
+- When `DATABASE_URL` and the SQLAlchemy dependencies are available, the engine also persists filing metadata, base metrics, derived metrics, and sync status transitions into PostgreSQL.
 
 Proof-of-concept script:
 

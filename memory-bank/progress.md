@@ -59,3 +59,8 @@
   - Enforced strict absolute-value normalization for abbreviated units such as `millions` and `billions` before model validation.
   - Hardened parsing fault tolerance so missing or `null` facts now default to `None` with non-fatal warning logs instead of breaking the pipeline.
   - Added mock-based parser tests covering synonym mapping, unit normalization, and graceful handling of missing metrics.
+- Completed Sprint 2 User Story 3 JSONB persistence layer:
+  - Added a second database migration that extends `filings` with direct upsert keys (`cik`, `form_type`, `period_end_date`, `accession_number`) and extends `financial_metrics` with separate `base_metrics` and `derived_metrics` JSONB columns.
+  - Added a SQLAlchemy-backed persistence store that reflects the PostgreSQL schema, upserts companies, sync status, filing registry rows, and JSONB metric payloads.
+  - Connected the Python sync flow to persist base Pydantic metrics and derived ratios while preserving in-memory polling responses for the existing handshake path.
+  - Added filing metadata extraction plus persistence-focused unit tests covering filing selection, JSON-ready payloads, and sync status transitions without requiring a live database.

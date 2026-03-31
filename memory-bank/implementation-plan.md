@@ -1,5 +1,9 @@
 ### Sprint 1: Infrastructure & "The Handshake"
 
+**Migration Guardrail**
+- Never rewrite or replace the contents of an existing numbered migration once it has been introduced into the repository or used by any local/remote environment.
+- All schema evolution must happen through new forward-only migration files so local Docker state, remote databases, and `schema_migrations` history stay consistent.
+
 **User Story 1: Monorepo & UI Template Foundation**
 - **Requirement**: I want to initialize a unified monorepo structure using Turborepo and `pnpm workspaces`, and migrate the provided HTML/Tailwind dashboard template into the Next.js app.
 - **Reason**: So that I have a high-performance development workflow and a ready-to-use visual interface for testing end-to-end connectivity.
@@ -173,3 +177,35 @@ User Story 6: CI-Driven Supabase Initialization
     - Given a report omits a metric entirely or reports the value as `null`,
     - When the engine parses the incomplete payload,
     - Then parsing must not throw a fatal exception, and the model must gracefully default the missing metric to `None` while logging a non-fatal warning.
+
+---
+
+**User Story 3: Database Persistence (JSONB "DNA" Injection)**
+
+**Role:** Developer
+**Requirement:** I want the Analysis Engine to persist validated SEC filing metadata and normalized metrics into the `filings` and `financial_metrics` tables using JSONB format.
+**Reason:** So that the Go Gateway can perform high-speed, type-safe pass-through queries to the Next.js frontend without complex SQL pivots or joins.
+
+**Scope & Boundaries:**
+
+- **In-Scope:** SQLAlchemy-compatible database schema interaction, upsert logic, JSONB persistence, and separation of base versus derived metric blobs.
+- **Out-of-Scope:** Go-side `sqlc` generation and Python-to-Go async callbacks.
+
+**Acceptance Criteria (Definition of Done):**
+
+- **AC1: Metadata Upsert & Filing Registry**
+    - Given the Python engine has parsed a new 10-K or 10-Q filing,
+    - When the data is committed to the `filings` table,
+    - Then the engine must upsert using the unique combination of `cik`, `form_type`, and `period_end_date`, while populating `accession_number` and `filed_at`.
+- **AC2: Wide-Format JSONB Storage (Base Metrics)**
+    - Given a Pydantic model containing standardized base facts,
+    - When persisting to the `financial_metrics` table,
+    - Then all base facts must be serialized into a single `base_metrics` JSONB column for fast historical pass-through queries.
+- **AC3: Derived Metrics & Calculation Traceability**
+    - Given the system has generated derived ratios,
+    - When saving them,
+    - Then they must be stored in a separate `derived_metrics` JSONB column so raw SEC source DNA remains isolated from internal calculations.
+- **AC4: Sync Status & Concurrency Control**
+    - Given a background sync process is triggered via the Go Gateway,
+    - When Python begins and ends scraping,
+    - Then the engine must update database-backed sync status through the expected transition `PENDING -> IN_PROGRESS -> SUCCESS` or `FAILURE`.
