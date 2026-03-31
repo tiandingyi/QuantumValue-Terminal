@@ -5,6 +5,8 @@ from typing import Callable, Optional
 
 import requests
 
+from app.models.financial_metric import FinancialMetric
+from app.parsers.financial_metric_parser import parse_financial_metric
 from app.providers.sec_constants import (
     DEFAULT_RATE_LIMIT_DELAY,
     SEC_BASE_URL,
@@ -158,6 +160,10 @@ class USProvider:
         """
         return extract_requested_financials(company_facts)
 
+    def parse_financial_metric(self, company_facts: dict) -> FinancialMetric:
+        """Parse raw SEC company facts into the standardized FinancialMetric model."""
+        return parse_financial_metric(company_facts)
+
     def _load_ticker_map(self) -> dict[str, CompanyLookup]:
         """Cache the SEC ticker mapping file so repeated lookups avoid extra network calls."""
         if self._ticker_cache is not None:
@@ -218,6 +224,7 @@ __all__ = [
     "CompanyLookup",
     "DEFAULT_RATE_LIMIT_DELAY",
     "DerivedMetric",
+    "FinancialMetric",
     "SEC_BASE_URL",
     "SEC_TICKER_MAP_URL",
     "SEC_USER_AGENT",

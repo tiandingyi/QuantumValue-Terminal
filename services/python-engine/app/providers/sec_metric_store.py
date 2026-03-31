@@ -218,7 +218,7 @@ class CompanyFactsMetricStore:
         candidates: list[dict[str, Any]] = []
         for unit_name, entries in metric_node.get("units", {}).items():
             for entry in entries:
-                if "val" not in entry or "end" not in entry:
+                if "val" not in entry or entry.get("val") is None or "end" not in entry:
                     continue
                 candidate = dict(entry)
                 candidate["unit"] = unit_name

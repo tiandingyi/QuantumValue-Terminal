@@ -131,3 +131,45 @@ User Story 6: CI-Driven Supabase Initialization
 - **AC5: API Rate Limiting**
     - The module must implement an internal throttling mechanism (e.g., a `time.sleep` of 0.15 seconds per request in a single-threaded context).
     - Outbound requests must strictly remain under the SEC's limit of 10 requests per second to prevent triggering circuit breakers and IP bans.
+
+---
+
+**User Story 2: Raw XBRL Data Parsing & Standardization (Pydantic Layer)**
+
+**Role:** Financial Analyst
+**Requirement:** I want the system's Python engine to automatically parse raw SEC XBRL/JSON data and map it to a standardized `FinancialMetric` Pydantic model.
+**Reason:** So that inconsistent accounting tags across different companies are normalized into a single source of truth, providing clean, unit-unified base facts for the downstream Value Investing Calculation Engine.
+
+**Scope & Boundaries:**
+
+- **In-Scope:** Mapping raw JSON to standardized Python objects, fault tolerance for missing data, extracting core financial facts, and strict absolute value conversion such as millions to full numeric values.
+- **Out-of-Scope:** Frontend number formatting and calculation of downstream derived metrics such as Free Cash Flow, ROE, or Gross Margin.
+
+**Acceptance Criteria (Definition of Done):**
+
+- **AC1: Accurate Base Fact Extraction & Synonym Compatibility**
+    - Given the system receives raw SEC JSON data containing various official accounting tags such as `RevenueFromContractWithCustomer` or `TotalRevenues`,
+    - When the data is parsed through the `FinancialMetric` Pydantic model,
+    - Then the model must correctly identify and output the following 13 core metrics:
+        1. `revenue`
+        2. `gross_profit`
+        3. `operating_income`
+        4. `net_income`
+        5. `operating_cash_flow`
+        6. `capex`
+        7. `depreciation_and_amortization`
+        8. `assets`
+        9. `liabilities`
+        10. `shareholders_equity`
+        11. `long_term_debt`
+        12. `eps_diluted`
+        13. `shares_outstanding`
+    - Engineers must add unit tests using mock JSON payloads with company-specific synonym tags and verify they map to the same internal field names.
+- **AC2: Strict Unit Normalization**
+    - Given the input JSON contains abbreviated numerical units such as `millions` or `billions`,
+    - When the model parses those fields,
+    - Then the output values must be converted to their absolute integer or float forms, and storing abbreviated relative values is prohibited.
+- **AC3: Graceful Missing Value & Fault Tolerance Handling**
+    - Given a report omits a metric entirely or reports the value as `null`,
+    - When the engine parses the incomplete payload,
+    - Then parsing must not throw a fatal exception, and the model must gracefully default the missing metric to `None` while logging a non-fatal warning.

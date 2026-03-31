@@ -50,3 +50,12 @@
   - Added a standalone proof-of-concept script at `services/python-engine/scripts/sec_test.py` and verified it live against SEC data for `NVDA`, including latest `Assets` extraction.
   - Upgraded the FastAPI sync flow so background jobs now perform real SEC fetches and expose a structured `latest_assets` summary in sync status details.
   - Added Python tests covering ticker mapping, CIK padding, header usage, throttling behavior, and async sync success/failure handling.
+
+## 2026-03-31
+
+- Completed Sprint 2 User Story 2 Pydantic standardization layer:
+  - Added a canonical `FinancialMetric` Pydantic model for 13 base financial facts, separate from the downstream derived-metrics flow.
+  - Added a dedicated parser that maps raw SEC company facts into standardized fields using synonym fallback lists for revenue, earnings, cash flow, leverage, equity, EPS, and share-count tags.
+  - Enforced strict absolute-value normalization for abbreviated units such as `millions` and `billions` before model validation.
+  - Hardened parsing fault tolerance so missing or `null` facts now default to `None` with non-fatal warning logs instead of breaking the pipeline.
+  - Added mock-based parser tests covering synonym mapping, unit normalization, and graceful handling of missing metrics.
