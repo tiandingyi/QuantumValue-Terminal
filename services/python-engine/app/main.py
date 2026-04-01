@@ -1,6 +1,7 @@
 import asyncio
 import logging
 import os
+import traceback
 from typing import Any
 from datetime import datetime, timezone
 from typing import Optional
@@ -16,6 +17,10 @@ from app.providers.us_provider import USProvider
 
 
 logger = logging.getLogger(__name__)
+SYNC_TASK_TYPE = "SEC_SYNC"
+SCRAPE_TASK_TYPE = "SCRAPE"
+PARSE_TASK_TYPE = "PARSE"
+STORE_TASK_TYPE = "STORE"
 
 
 class SyncResponse(BaseModel):
@@ -61,24 +66,35 @@ async def finish_sync(ticker: str) -> None:
     await asyncio.sleep(0)
     provider = provider_factory()
     company = None
+    store = None
+    current_stage: Optional[str] = None
 
     try:
         store = persistence_store_factory()
         company = await asyncio.to_thread(provider.resolve_ticker, ticker)
         if store is not None:
-            await asyncio.to_thread(store.upsert_sync_status, company, "SEC_SYNC", "PENDING", None)
-            await asyncio.to_thread(store.upsert_sync_status, company, "SEC_SYNC", "IN_PROGRESS", None)
+            await asyncio.to_thread(store.upsert_sync_status, company, SYNC_TASK_TYPE, "PENDING", None)
+            await asyncio.to_thread(store.upsert_sync_status, company, SYNC_TASK_TYPE, "IN_PROGRESS", None)
+            await asyncio.to_thread(store.upsert_sync_status, company, SCRAPE_TASK_TYPE, "IN_PROGRESS", None)
 
+        current_stage = SCRAPE_TASK_TYPE
         submissions = await asyncio.to_thread(provider.get_submissions, company.cik)
         company_facts = await asyncio.to_thread(provider.get_company_facts, company.cik)
         bundle = CompanyDataBundle(company=company, submissions=submissions, company_facts=company_facts)
+        if store is not None:
+            await asyncio.to_thread(store.upsert_sync_status, company, SCRAPE_TASK_TYPE, "SUCCESS", None)
+            await asyncio.to_thread(store.upsert_sync_status, company, PARSE_TASK_TYPE, "IN_PROGRESS", None)
 
+        current_stage = PARSE_TASK_TYPE
         latest_assets = provider.extract_latest_metric(bundle.company_facts, "Assets")
         base_metrics = provider.parse_financial_metric(bundle.company_facts)
         derived_metrics = provider.extract_requested_financials(bundle.company_facts)
         persistence_details: Optional[dict[str, Any]] = None
 
         if store is not None:
+            await asyncio.to_thread(store.upsert_sync_status, company, PARSE_TASK_TYPE, "SUCCESS", None)
+            await asyncio.to_thread(store.upsert_sync_status, company, STORE_TASK_TYPE, "IN_PROGRESS", None)
+            current_stage = STORE_TASK_TYPE
             filing_metadata = extract_latest_supported_filing(bundle.submissions, bundle.company.cik)
             persistence_details = await asyncio.to_thread(
                 store.persist_filing_bundle,
@@ -87,7 +103,8 @@ async def finish_sync(ticker: str) -> None:
                 base_metrics,
                 derived_metrics,
             )
-            await asyncio.to_thread(store.upsert_sync_status, bundle.company, "SEC_SYNC", "SUCCESS", None)
+            await asyncio.to_thread(store.upsert_sync_status, bundle.company, STORE_TASK_TYPE, "SUCCESS", None)
+            await asyncio.to_thread(store.upsert_sync_status, bundle.company, SYNC_TASK_TYPE, "SUCCESS", None)
 
         sync_state.set(
             ticker,
@@ -107,13 +124,16 @@ async def finish_sync(ticker: str) -> None:
             },
         )
     except Exception as exc:
-        store = None
-        try:
-            store = persistence_store_factory()
-        except Exception:
-            store = None
+        error_details = traceback.format_exc()
+        if store is None:
+            try:
+                store = persistence_store_factory()
+            except Exception:
+                store = None
         if store is not None and company is not None:
-            await asyncio.to_thread(store.upsert_sync_status, company, "SEC_SYNC", "FAILURE", str(exc))
+            failed_stage = current_stage or SYNC_TASK_TYPE
+            await asyncio.to_thread(store.upsert_sync_status, company, failed_stage, "FAILURE", error_details)
+            await asyncio.to_thread(store.upsert_sync_status, company, SYNC_TASK_TYPE, "FAILURE", error_details)
         logger.exception("SEC EDGAR sync failed for %s", ticker)
         sync_state.set(
             ticker,

@@ -226,3 +226,20 @@ User Story 6: CI-Driven Supabase Initialization
     - When the SEC returns `429 Too Many Requests`,
     - The engine must apply a back-off and retry strategy instead of failing immediately.
     - The retry flow should honor `Retry-After` when present and otherwise use a bounded back-off policy.
+
+---
+
+**User Story 5: Sync Status & Error Logging**
+
+**Role:** DevOps Engineer
+**Requirement:** I want the Python engine to update the `sync_status` table at each stage of the scraping process (`SCRAPE`, `PARSE`, `STORE`).
+**Reason:** To provide real-time visibility into the progress of 20-year data backfills and simplify troubleshooting of failed extractions.
+
+**Acceptance Criteria (Definition of Done):**
+
+- **AC1: Stage-Level In-Progress Tracking**
+    - Each stage task must begin by upserting an `IN_PROGRESS` status row in the database.
+- **AC2: Stage-Level Success Tracking**
+    - When a stage completes successfully, the engine must mark that same stage row as `SUCCESS`.
+- **AC3: Failure Diagnostics**
+    - When a stage fails, the engine must mark the failing stage as `FAILURE` and capture the stack trace or error message in `last_error` for debugging.

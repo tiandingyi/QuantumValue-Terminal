@@ -73,3 +73,8 @@
   - Added bounded 429 retry handling in `USProvider`, including `Retry-After` header support, exponential backoff fallback, and warning logs for each retry attempt.
   - Preserved failure transparency by raising a final `HTTPError` after the retry budget is exhausted instead of silently swallowing repeated SEC throttling responses.
   - Expanded provider tests to cover successful 429 recovery, retry exhaustion, and the interaction between retry sleeps and the existing throttle behavior.
+- Completed Sprint 2 User Story 5 sync status stage logging:
+  - Added the story definition to the implementation plan so stage-level `SCRAPE`, `PARSE`, and `STORE` visibility is tracked explicitly.
+  - Updated the FastAPI sync orchestration to upsert stage-specific `IN_PROGRESS` and `SUCCESS` rows while preserving the existing top-level `SEC_SYNC` status for handshake compatibility.
+  - Hardened failure handling so the failing stage and the overall sync row both record `FAILURE` with the captured Python traceback in `last_error`.
+  - Expanded sync tests to verify stage ordering on success, scrape-stage failure diagnostics, and store-stage failure diagnostics.
