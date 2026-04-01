@@ -1,13 +1,18 @@
 from __future__ import annotations
 
+import logging
 import time
+from datetime import datetime, timezone
 from typing import Callable, Optional
+from email.utils import parsedate_to_datetime
 
 import requests
 
 from app.models.financial_metric import FinancialMetric
 from app.parsers.financial_metric_parser import parse_financial_metric
 from app.providers.sec_constants import (
+    DEFAULT_BACKOFF_BASE_DELAY,
+    DEFAULT_MAX_RETRIES,
     DEFAULT_RATE_LIMIT_DELAY,
     SEC_BASE_URL,
     SEC_TICKER_MAP_URL,
@@ -17,6 +22,9 @@ from app.providers.sec_financials import extract_requested_financials
 from app.providers.sec_metric_store import CompanyFactsMetricStore
 from app.providers.sec_types import CompanyDataBundle, CompanyLookup, DerivedMetric
 from app.providers.sec_utils import normalize_ticker, pad_cik
+
+
+logger = logging.getLogger(__name__)
 
 
 class USProvider:
@@ -33,6 +41,8 @@ class USProvider:
         session: Optional[requests.Session] = None,
         request_delay: float = DEFAULT_RATE_LIMIT_DELAY,
         timeout: float = 30.0,
+        max_retries: int = DEFAULT_MAX_RETRIES,
+        backoff_base_delay: float = DEFAULT_BACKOFF_BASE_DELAY,
         sleep_fn: Callable[[float], None] = time.sleep,
         clock_fn: Callable[[], float] = time.monotonic,
     ) -> None:
@@ -42,12 +52,16 @@ class USProvider:
             session: Optional requests session for connection reuse or testing.
             request_delay: Minimum delay between SEC requests in seconds.
             timeout: Per-request timeout in seconds.
+            max_retries: Maximum retry attempts for 429 responses.
+            backoff_base_delay: Base delay used for bounded exponential backoff.
             sleep_fn: Injectable sleep function used by the throttle.
             clock_fn: Injectable monotonic clock used by the throttle.
         """
         self._session = session or requests.Session()
         self._request_delay = request_delay
         self._timeout = timeout
+        self._max_retries = max_retries
+        self._backoff_base_delay = backoff_base_delay
         self._sleep = sleep_fn
         self._clock = clock_fn
         self._last_request_at: Optional[float] = None
@@ -194,18 +208,7 @@ class USProvider:
         Raises:
             requests.RequestException: If the SEC request fails.
         """
-        self._throttle()
-        response = self._session.get(
-            url,
-            headers={
-                "User-Agent": SEC_USER_AGENT,
-                "Accept-Encoding": "gzip, deflate",
-                "Accept": "application/json",
-            },
-            timeout=self._timeout,
-        )
-        response.raise_for_status()
-        self._last_request_at = self._clock()
+        response = self._request_with_resilience(url)
         return response.json()
 
     def _throttle(self) -> None:
@@ -218,10 +221,78 @@ class USProvider:
         if remaining > 0:
             self._sleep(remaining)
 
+    def _request_with_resilience(self, url: str) -> requests.Response:
+        """Apply the shared SEC request policy: throttle first, then bounded retry on 429."""
+        attempt = 0
+
+        while attempt <= self._max_retries:
+            self._throttle()
+            response = self._session.get(
+                url,
+                headers={
+                    "User-Agent": SEC_USER_AGENT,
+                    "Accept-Encoding": "gzip, deflate",
+                    "Accept": "application/json",
+                },
+                timeout=self._timeout,
+            )
+            self._last_request_at = self._clock()
+
+            if response.status_code != 429:
+                response.raise_for_status()
+                return response
+
+            if attempt == self._max_retries:
+                response.raise_for_status()
+
+            retry_delay = self._resolve_retry_delay(response, attempt)
+            logger.warning(
+                "SEC responded with 429 for %s. Retrying in %.2fs (attempt %d/%d).",
+                url,
+                retry_delay,
+                attempt + 1,
+                self._max_retries + 1,
+            )
+            self._sleep(retry_delay)
+            attempt += 1
+
+        raise requests.HTTPError("SEC request retry loop exited unexpectedly.")
+
+    def _resolve_retry_delay(self, response: requests.Response, attempt: int) -> float:
+        """Prefer SEC-provided Retry-After values before falling back to exponential backoff."""
+        retry_after = response.headers.get("Retry-After")
+        if retry_after:
+            parsed_retry = _parse_retry_after_seconds(retry_after)
+            if parsed_retry is not None and parsed_retry > 0:
+                return parsed_retry
+
+        return self._backoff_base_delay * (2**attempt)
+
+
+def _parse_retry_after_seconds(
+    retry_after: str,
+) -> Optional[float]:
+    try:
+        return float(retry_after)
+    except ValueError:
+        pass
+
+    try:
+        retry_at = parsedate_to_datetime(retry_after)
+    except (TypeError, ValueError, IndexError):
+        return None
+
+    now = datetime.now(timezone.utc)
+    if retry_at.tzinfo is None:
+        retry_at = retry_at.replace(tzinfo=timezone.utc)
+    return max((retry_at - now).total_seconds(), 0.0)
+
 
 __all__ = [
     "CompanyDataBundle",
     "CompanyLookup",
+    "DEFAULT_BACKOFF_BASE_DELAY",
+    "DEFAULT_MAX_RETRIES",
     "DEFAULT_RATE_LIMIT_DELAY",
     "DerivedMetric",
     "FinancialMetric",

@@ -209,3 +209,20 @@ User Story 6: CI-Driven Supabase Initialization
     - Given a background sync process is triggered via the Go Gateway,
     - When Python begins and ends scraping,
     - Then the engine must update database-backed sync status through the expected transition `PENDING -> IN_PROGRESS -> SUCCESS` or `FAILURE`.
+
+---
+
+**User Story 4: SEC Rate Limiting & Resilience**
+
+**Role:** DevOps Engineer
+**Requirement:** I want to implement a rate-limiting mechanism that restricts SEC API calls to no more than 10 requests per second.
+**Reason:** To comply with SEC regulations and prevent the platform's IP from being blacklisted.
+
+**Acceptance Criteria (Definition of Done):**
+
+- **AC1: Request Frequency Guardrail**
+    - The engine must use a shared request wrapper, middleware, decorator, or equivalent provider-level mechanism to keep SEC traffic at or below 10 requests per second.
+- **AC2: 429 Resilience**
+    - When the SEC returns `429 Too Many Requests`,
+    - The engine must apply a back-off and retry strategy instead of failing immediately.
+    - The retry flow should honor `Retry-After` when present and otherwise use a bounded back-off policy.

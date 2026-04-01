@@ -64,3 +64,12 @@
   - Added a SQLAlchemy-backed persistence store that reflects the PostgreSQL schema, upserts companies, sync status, filing registry rows, and JSONB metric payloads.
   - Connected the Python sync flow to persist base Pydantic metrics and derived ratios while preserving in-memory polling responses for the existing handshake path.
   - Added filing metadata extraction plus persistence-focused unit tests covering filing selection, JSON-ready payloads, and sync status transitions without requiring a live database.
+
+## 2026-04-01
+
+- Completed Sprint 2 User Story 4 SEC rate limiting and resilience:
+  - Added the story definition to the implementation plan so the SEC request guardrail and 429 recovery behavior are tracked alongside the earlier Sprint 2 stories.
+  - Kept the existing provider-level throttle in place so SEC requests remain capped below 10 requests per second.
+  - Added bounded 429 retry handling in `USProvider`, including `Retry-After` header support, exponential backoff fallback, and warning logs for each retry attempt.
+  - Preserved failure transparency by raising a final `HTTPError` after the retry budget is exhausted instead of silently swallowing repeated SEC throttling responses.
+  - Expanded provider tests to cover successful 429 recovery, retry exhaustion, and the interaction between retry sleeps and the existing throttle behavior.

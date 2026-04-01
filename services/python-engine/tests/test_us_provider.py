@@ -1,11 +1,18 @@
+import requests
+
 from app.providers.us_provider import SEC_TICKER_MAP_URL, USProvider, pad_cik
 
 
 class FakeResponse:
-    def __init__(self, payload):
+    def __init__(self, payload, status_code=200, headers=None, url="https://example.test"):
         self._payload = payload
+        self.status_code = status_code
+        self.headers = headers or {}
+        self.url = url
 
     def raise_for_status(self) -> None:
+        if self.status_code >= 400:
+            raise requests.HTTPError(f"{self.status_code} error for {self.url}", response=self)
         return None
 
     def json(self):
@@ -19,7 +26,11 @@ class FakeSession:
 
     def get(self, url, headers, timeout):
         self.calls.append({"url": url, "headers": headers, "timeout": timeout})
-        return FakeResponse(self._responses[url])
+        response = self._responses[url]
+        if isinstance(response, list):
+            next_response = response.pop(0)
+            return next_response
+        return response
 
 
 def test_pad_cik_zero_fills_values() -> None:
@@ -30,15 +41,15 @@ def test_pad_cik_zero_fills_values() -> None:
 def test_fetch_company_data_uses_ticker_mapping_and_sec_headers() -> None:
     session = FakeSession(
         {
-            SEC_TICKER_MAP_URL: {
+            SEC_TICKER_MAP_URL: FakeResponse({
                 "0": {"ticker": "NVDA", "cik_str": 1045810, "title": "NVIDIA CORP"},
-            },
-            "https://data.sec.gov/submissions/CIK0001045810.json": {
+            }),
+            "https://data.sec.gov/submissions/CIK0001045810.json": FakeResponse({
                 "name": "NVIDIA CORP",
-            },
-            "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json": {
+            }),
+            "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json": FakeResponse({
                 "facts": {},
-            },
+            }),
         }
     )
     sleeps = []
@@ -144,3 +155,69 @@ def test_extract_requested_financials_derives_requested_metrics() -> None:
     assert round(metrics["gross_margin"].value, 4) == round(97500 / 130500, 4)
     assert metrics["ebit"].value == 81453
     assert metrics["interest_expense"].value == 250
+
+
+def test_get_json_retries_after_429_and_respects_retry_after_seconds() -> None:
+    session = FakeSession(
+        {
+            "https://data.sec.gov/api/xbrl/companyfacts/CIK0001045810.json": [
+                FakeResponse({}, status_code=429, headers={"Retry-After": "1"}),
+                FakeResponse({"facts": {"ok": True}}, status_code=200),
+            ]
+        }
+    )
+    sleeps = []
+    current_time = {"value": 0.0}
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(round(seconds, 2))
+        current_time["value"] += seconds
+
+    provider = USProvider(
+        session=session,
+        sleep_fn=fake_sleep,
+        clock_fn=lambda: current_time["value"],
+    )
+
+    payload = provider.get_company_facts("0001045810")
+
+    assert payload["facts"]["ok"] is True
+    assert len(session.calls) == 2
+    assert sleeps == [1.0]
+
+
+def test_get_json_raises_after_retry_budget_exhausted() -> None:
+    session = FakeSession(
+        {
+            "https://data.sec.gov/submissions/CIK0001045810.json": [
+                FakeResponse({}, status_code=429),
+                FakeResponse({}, status_code=429),
+                FakeResponse({}, status_code=429),
+            ]
+        }
+    )
+    sleeps = []
+    current_time = {"value": 0.0}
+
+    def fake_sleep(seconds: float) -> None:
+        sleeps.append(round(seconds, 2))
+        current_time["value"] += seconds
+
+    provider = USProvider(
+        session=session,
+        max_retries=2,
+        backoff_base_delay=0.5,
+        sleep_fn=fake_sleep,
+        clock_fn=lambda: current_time["value"],
+    )
+
+    try:
+        provider.get_submissions("0001045810")
+    except requests.HTTPError as exc:
+        assert exc.response is not None
+        assert exc.response.status_code == 429
+    else:
+        raise AssertionError("Expected repeated 429 responses to raise an HTTPError")
+
+    assert len(session.calls) == 3
+    assert sleeps == [0.5, 1.0]
