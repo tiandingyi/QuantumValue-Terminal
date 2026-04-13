@@ -11,8 +11,13 @@ type SyncPayload = {
 
 const apiBaseURL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
 
-export function SearchBar() {
-  const [ticker, setTicker] = useState("AAPL");
+type SearchBarProps = {
+  activeTicker: string;
+  onTickerSelected: (ticker: string) => void;
+};
+
+export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
+  const [ticker, setTicker] = useState(activeTicker);
   const [syncStatus, setSyncStatus] = useState<SyncPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -25,6 +30,10 @@ export function SearchBar() {
       }
     };
   }, []);
+
+  useEffect(() => {
+    setTicker(activeTicker);
+  }, [activeTicker]);
 
   async function pollStatus(activeTicker: string) {
     if (intervalRef.current) {
@@ -41,6 +50,7 @@ export function SearchBar() {
         setSyncStatus(payload);
 
         if (response.status === 200 || payload.status === "SUCCESS") {
+          onTickerSelected(activeTicker);
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
           }
@@ -68,6 +78,7 @@ export function SearchBar() {
     setError(null);
     setIsSubmitting(true);
     setSyncStatus(null);
+    onTickerSelected(normalizedTicker);
 
     try {
       const response = await fetch(`${apiBaseURL}/api/v1/sync/${normalizedTicker}`, {

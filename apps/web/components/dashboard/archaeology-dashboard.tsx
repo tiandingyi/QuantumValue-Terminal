@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   CategoryScale,
   Chart as ChartJS,
@@ -66,9 +66,11 @@ const chartOptions: ChartOptions<"line"> = {
   },
 };
 
-export function ArchaeologyDashboard() {
-  const [ticker, setTicker] = useState("AAPL");
-  const [activeTicker, setActiveTicker] = useState("AAPL");
+type ArchaeologyDashboardProps = {
+  activeTicker: string;
+};
+
+export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps) {
   const [financials, setFinancials] = useState<FinancialsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -174,14 +176,6 @@ export function ArchaeologyDashboard() {
     [trendPoints],
   );
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const normalizedTicker = ticker.trim().toUpperCase();
-    if (normalizedTicker) {
-      setActiveTicker(normalizedTicker);
-    }
-  }
-
   return (
     <section className="animate-rise px-4 md:px-8" style={{ animationDelay: "160ms" }}>
       <div className="mx-auto max-w-6xl border-y border-white/10 py-7 md:py-9">
@@ -195,20 +189,9 @@ export function ArchaeologyDashboard() {
               Revenue, earnings, cash generation, and valuation signals from the Go Gateway JSONB feed.
             </p>
           </div>
-          <form onSubmit={handleSubmit} className="flex w-full max-w-sm gap-2">
-            <input
-              value={ticker}
-              onChange={(event) => setTicker(event.target.value)}
-              className="min-w-0 flex-1 rounded-lg border border-white/10 bg-black/25 px-3 py-2 text-sm text-white outline-none transition placeholder:text-slate-500 focus:border-cyan-glow/50"
-              placeholder="Ticker"
-            />
-            <button
-              type="submit"
-              className="rounded-lg border border-cyan-glow/30 bg-cyan-glow/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.2em] text-cyan-glow transition hover:bg-cyan-glow/20"
-            >
-              Load
-            </button>
-          </form>
+          <div className="border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-300">
+            Active ticker: <span className="font-mono text-cyan-glow">{activeTicker}</span>
+          </div>
         </div>
 
         {isLoading ? <LoadingState /> : null}
