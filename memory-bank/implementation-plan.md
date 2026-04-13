@@ -338,3 +338,20 @@ User Story 6: CI-Driven Supabase Initialization
 - The Next.js UI features a dashboard layout displaying at least two Chart.js time-series graphs, such as Revenue vs. Net Income and Free Cash Flow.
 - The UI displays a prominent Valuation Scorecard showing the target's current P/E Percentile, Owner Earnings, and Quantitative Formula Score.
 - The component correctly handles loading states and displays a graceful fallback if the 10-year historical data is incomplete.
+
+**User Story 5: Browser E2E Verification for Sync-to-Dashboard Flow**
+
+**Role:** QA Engineer / Full-Stack Developer
+**Requirement:** I want every frontend-facing Sprint 3 card to include an end-to-end browser verification path that operates the actual Next.js UI against the local Docker stack.
+**Reason:** To catch hydration issues, non-clicking buttons, stale default ticker state, missing historical rows, and other real user-flow regressions that unit tests or direct API checks cannot reveal.
+
+**Acceptance Criteria:**
+
+- Before marking any UI or sync-to-dashboard card complete, the agent must run the local parity stack with `docker compose` and operate the frontend in a real browser, not only through curl or component helper tests.
+- The E2E flow must enter a non-default ticker such as `cost`, click `Sync`, and verify that the UI visibly transitions from the previous active ticker to the requested ticker.
+- The E2E flow must confirm the Go Gateway receives the matching `/api/v1/sync/:ticker`, `/api/v1/status/:ticker`, and `/api/v1/financials/:ticker` traffic while preserving the PRD architecture: Next.js -> Go Gateway -> sqlc/PostgreSQL and Go Gateway -> Python sync.
+- The E2E flow must verify that historical filing data appears in the UI after sync, including at least one charted financial series and the historical filing table populated from Go Gateway JSONB data.
+- The E2E flow must explicitly check UX affordances that unit tests miss, including that the Sync button is clickable, the cursor affordance is correct, loading/mining states are visible, and stale placeholder copy such as the default `AAPL` state does not remain after a successful ticker change.
+- The E2E evidence must include either a Playwright trace/screenshot artifact under `output/playwright/` or a terminal-recorded browser snapshot plus the exact command used to reproduce the flow.
+- If Playwright CLI or browser automation tooling is unavailable, the card cannot be marked complete until the blocker is documented and resolved; API-only verification is insufficient for frontend-facing cards.
+- CI should eventually run a deterministic E2E variant against seeded or mocked local data, but local human-equivalent browser operation remains required before closing the story.

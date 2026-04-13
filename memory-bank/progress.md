@@ -117,3 +117,7 @@
   - Reworked the frontend scorecard to prioritize SEC-derived historical fundamentals and avoid surfacing skipped valuation inputs as primary `Pending` cards.
   - Added a historical filing table and fixed the Sync button cursor affordance.
   - Verified local `COST` sync now stores 20 `financial_metrics` rows from 2021-05-09 through 2026-02-15.
+- Added Sprint 3 User Story 5 for browser E2E verification:
+  - Requires real-browser operation against the local Docker stack before closing frontend-facing cards.
+  - Makes ticker input, Sync click behavior, Go Gateway traffic, active ticker changes, historical table population, loading states, cursor affordance, and stale default-copy checks explicit acceptance criteria.
+  - Requires screenshot/trace or browser snapshot evidence; API-only verification is no longer sufficient for UI sync flows.
