@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import logging
-from typing import Any, Optional, Tuple
+from dataclasses import dataclass
+from typing import Any, Iterable, Optional, Tuple
 
 from app.models.financial_metric import FinancialMetric
 from app.providers.sec_metric_store import CompanyFactsMetricStore
@@ -71,12 +72,45 @@ UNIT_MULTIPLIERS = {
 }
 
 ANCHOR_TAGS = METRIC_TAGS["revenue"] + METRIC_TAGS["net_income"]
+DEFAULT_REQUIRED_METRIC_FIELDS = frozenset(METRIC_TAGS.keys())
 
 
-def parse_financial_metric(company_facts: dict[str, Any]) -> FinancialMetric:
+@dataclass(frozen=True)
+class FinancialMetricMappingError(ValueError):
+    field_name: str
+    candidate_tags: list[str]
+    ticker: Optional[str] = None
+    cik: Optional[str] = None
+    period_context: Optional[dict[str, Any]] = None
+
+    def __str__(self) -> str:
+        context_parts = [
+            f"field={self.field_name}",
+            f"candidate_tags={self.candidate_tags}",
+        ]
+        if self.ticker:
+            context_parts.append(f"ticker={self.ticker}")
+        if self.cik:
+            context_parts.append(f"cik={self.cik}")
+        if self.period_context:
+            context_parts.append(f"period_context={self.period_context}")
+        return "Missing required SEC financial fact mapping (" + ", ".join(context_parts) + ")"
+
+
+def parse_financial_metric(
+    company_facts: dict[str, Any],
+    *,
+    ticker: Optional[str] = None,
+    cik: Optional[str] = None,
+    required_fields: Optional[Iterable[str]] = None,
+) -> FinancialMetric:
     """Parse raw SEC company facts into a standardized Pydantic model."""
     store = CompanyFactsMetricStore(company_facts)
     anchor = _resolve_anchor(store)
+    required_field_names = set(required_fields) if required_fields is not None else set(DEFAULT_REQUIRED_METRIC_FIELDS)
+    unknown_required_fields = required_field_names - set(METRIC_TAGS)
+    if unknown_required_fields:
+        raise ValueError(f"Unknown required FinancialMetric fields: {sorted(unknown_required_fields)}")
 
     values: dict[str, Any] = {"source_tags": {}}
     aligned_facts: list[dict[str, Any]] = []
@@ -84,6 +118,14 @@ def parse_financial_metric(company_facts: dict[str, Any]) -> FinancialMetric:
     for field_name, metric_tags in METRIC_TAGS.items():
         metric = _safe_lookup(store, field_name, metric_tags, anchor)
         if metric is None:
+            if field_name in required_field_names:
+                raise FinancialMetricMappingError(
+                    field_name=field_name,
+                    candidate_tags=metric_tags,
+                    ticker=ticker,
+                    cik=cik,
+                    period_context=_period_context(anchor),
+                )
             values[field_name] = None
             continue
 
@@ -98,6 +140,17 @@ def parse_financial_metric(company_facts: dict[str, Any]) -> FinancialMetric:
         values["filed_at"] = max(filed_values) if filed_values else None
 
     return FinancialMetric.model_validate(values)
+
+
+def _period_context(anchor: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:
+    if anchor is None:
+        return None
+
+    return {
+        key: anchor.get(key)
+        for key in ("end", "filed", "form", "fy", "fp")
+        if anchor.get(key) is not None
+    }
 
 
 def _resolve_anchor(

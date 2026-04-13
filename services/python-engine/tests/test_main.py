@@ -5,6 +5,7 @@ from fastapi.testclient import TestClient
 from app.main import app
 import app.main as main_module
 from app.models.financial_metric import FinancialMetric
+from app.parsers.financial_metric_parser import FinancialMetricMappingError
 from app.providers.us_provider import CompanyDataBundle, CompanyLookup
 
 
@@ -90,7 +91,7 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
                 "form": "10-K",
             }
 
-        def parse_financial_metric(self, company_facts) -> FinancialMetric:
+        def parse_financial_metric(self, company_facts, **kwargs) -> FinancialMetric:
             return FinancialMetric(
                 period_end="2026-01-25",
                 filed_at="2026-02-21",
@@ -210,7 +211,7 @@ def test_finish_sync_marks_store_failure_with_traceback(monkeypatch) -> None:
                 "form": "10-K",
             }
 
-        def parse_financial_metric(self, company_facts) -> FinancialMetric:
+        def parse_financial_metric(self, company_facts, **kwargs) -> FinancialMetric:
             return FinancialMetric(
                 period_end="2026-06-30",
                 filed_at="2026-07-30",
@@ -241,5 +242,84 @@ def test_finish_sync_marks_store_failure_with_traceback(monkeypatch) -> None:
     assert fake_store.statuses[-2][2] == "FAILURE"
     assert "Traceback" in fake_store.statuses[-2][3]
     assert "database write exploded" in fake_store.statuses[-2][3]
+    assert fake_store.statuses[-1][1] == "SEC_SYNC"
+    assert fake_store.statuses[-1][2] == "FAILURE"
+
+
+def test_finish_sync_blocks_persistence_when_required_mapping_fails(monkeypatch) -> None:
+    class FakeStore:
+        def __init__(self) -> None:
+            self.statuses = []
+            self.persist_called = False
+
+        def upsert_sync_status(self, company, task_type: str, status: str, last_error=None) -> None:
+            self.statuses.append((company.ticker, task_type, status, last_error))
+
+        def persist_filing_bundle(self, company, filing, base_metrics, derived_metrics):
+            self.persist_called = True
+            raise AssertionError("persist_filing_bundle should not be called when parsing fails")
+
+    class FakeProvider:
+        def resolve_ticker(self, ticker: str) -> CompanyLookup:
+            return CompanyLookup(ticker="GAP", cik="0000000002", name="GAP CORP")
+
+        def get_submissions(self, cik: str):
+            return {
+                "name": "GAP CORP",
+                "filings": {
+                    "recent": {
+                        "form": ["10-K"],
+                        "accessionNumber": ["0000000002-26-000001"],
+                        "filingDate": ["2026-02-20"],
+                        "reportDate": ["2025-12-31"],
+                    }
+                },
+            }
+
+        def get_company_facts(self, cik: str):
+            return {"facts": {"us-gaap": {}}}
+
+        def extract_latest_metric(self, company_facts, metric_name: str):
+            return {
+                "val": 333333,
+                "unit": "USD",
+                "end": "2025-12-31",
+                "filed": "2026-02-20",
+                "form": "10-K",
+            }
+
+        def parse_financial_metric(self, company_facts, **kwargs) -> FinancialMetric:
+            raise FinancialMetricMappingError(
+                field_name="revenue",
+                candidate_tags=["Revenues", "SalesRevenueNet"],
+                ticker=kwargs.get("ticker"),
+                cik=kwargs.get("cik"),
+                period_context={"end": "2025-12-31", "form": "10-K"},
+            )
+
+        def extract_requested_financials(self, company_facts):
+            raise AssertionError("derived metrics should not be computed when base parsing fails")
+
+    fake_store = FakeStore()
+    monkeypatch.setattr(main_module, "provider_factory", FakeProvider)
+    monkeypatch.setattr(main_module, "persistence_store_factory", lambda: fake_store)
+    asyncio.run(main_module.finish_sync("GAP"))
+
+    payload = main_module.sync_state.get("GAP")
+    assert payload is not None
+    assert payload.status == "FAILED"
+    assert "revenue" in payload.message
+    assert fake_store.persist_called is False
+    assert fake_store.statuses[0] == ("GAP", "SEC_SYNC", "PENDING", None)
+    assert fake_store.statuses[1] == ("GAP", "SEC_SYNC", "IN_PROGRESS", None)
+    assert fake_store.statuses[2] == ("GAP", "SCRAPE", "IN_PROGRESS", None)
+    assert fake_store.statuses[3] == ("GAP", "SCRAPE", "SUCCESS", None)
+    assert fake_store.statuses[4] == ("GAP", "PARSE", "IN_PROGRESS", None)
+    assert fake_store.statuses[-2][1] == "PARSE"
+    assert fake_store.statuses[-2][2] == "FAILURE"
+    assert "FinancialMetricMappingError" in fake_store.statuses[-2][3]
+    assert "revenue" in fake_store.statuses[-2][3]
+    assert "Revenues" in fake_store.statuses[-2][3]
+    assert "0000000002" in fake_store.statuses[-2][3]
     assert fake_store.statuses[-1][1] == "SEC_SYNC"
     assert fake_store.statuses[-1][2] == "FAILURE"

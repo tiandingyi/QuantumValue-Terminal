@@ -78,3 +78,12 @@
   - Updated the FastAPI sync orchestration to upsert stage-specific `IN_PROGRESS` and `SUCCESS` rows while preserving the existing top-level `SEC_SYNC` status for handshake compatibility.
   - Hardened failure handling so the failing stage and the overall sync row both record `FAILURE` with the captured Python traceback in `last_error`.
   - Expanded sync tests to verify stage ordering on success, scrape-stage failure diagnostics, and store-stage failure diagnostics.
+
+## 2026-04-13
+
+- Completed Sprint 2 User Story 6 financial fact mapping exception guardrail:
+  - Added a configurable required-vs-optional base fact mapping policy to the Python `FinancialMetric` parser.
+  - Added a structured `FinancialMetricMappingError` that reports the missing canonical field, attempted SEC fallback tags, ticker, CIK, and filing-period context when available.
+  - Updated the sync pipeline to pass company identity into the parser so parse-stage diagnostics are traceable.
+  - Preserved optional fact tolerance while preventing required mapping failures from reaching filing or metrics persistence.
+  - Added regression tests covering required mapping failures, optional missing facts, parse-stage failure status updates, and no partial persistence.

@@ -87,7 +87,11 @@ async def finish_sync(ticker: str) -> None:
 
         current_stage = PARSE_TASK_TYPE
         latest_assets = provider.extract_latest_metric(bundle.company_facts, "Assets")
-        base_metrics = provider.parse_financial_metric(bundle.company_facts)
+        base_metrics = provider.parse_financial_metric(
+            bundle.company_facts,
+            ticker=bundle.company.ticker,
+            cik=bundle.company.cik,
+        )
         derived_metrics = provider.extract_requested_financials(bundle.company_facts)
         persistence_details: Optional[dict[str, Any]] = None
 

@@ -243,3 +243,38 @@ User Story 6: CI-Driven Supabase Initialization
     - When a stage completes successfully, the engine must mark that same stage row as `SUCCESS`.
 - **AC3: Failure Diagnostics**
     - When a stage fails, the engine must mark the failing stage as `FAILURE` and capture the stack trace or error message in `last_error` for debugging.
+
+---
+
+**User Story 6: Financial Fact Mapping Exception Guardrail**
+
+**Role:** Data Quality Engineer
+**Requirement:** I want the Python engine to treat unmapped required financial facts as a hard parsing exception before database persistence.
+**Reason:** The SEC XBRL tag fallback list may be incomplete for some companies or industries. If the parser cannot map required facts into the canonical Pydantic model, the system should fail loudly instead of silently storing incomplete or misleading financial DNA.
+
+**Scope & Boundaries:**
+
+- **In-Scope:** Detecting unmapped required base facts during the SEC company-facts to `FinancialMetric` conversion step, surfacing structured parse errors, marking sync status as `FAILURE`, and preventing writes to `filings` and `financial_metrics` for failed conversions.
+- **Out-of-Scope:** Automatically discovering new SEC taxonomy mappings, using AI to infer missing tags, or backfilling historical rows already written before this guardrail exists.
+
+**Acceptance Criteria (Definition of Done):**
+
+- **AC1: Required Mapping Failure Detection**
+    - Given the parser cannot find a configured SEC XBRL tag for any required canonical base fact,
+    - When converting raw SEC `companyfacts` into the `FinancialMetric` Pydantic model,
+    - Then the parser must raise a structured exception that names the canonical field, attempted fallback tags, ticker/CIK when available, and filing period context when available.
+- **AC2: No Partial Persistence on Parse Failure**
+    - Given a required financial fact mapping fails,
+    - When the sync pipeline reaches the `PARSE` stage,
+    - Then the engine must not write or upsert the related `filings` or `financial_metrics` rows for that filing.
+- **AC3: Sync Status Error Capture**
+    - Given a mapping exception is raised,
+    - When the background sync handles the failure,
+    - Then the `PARSE` stage and overall `SEC_SYNC` status must be marked as `FAILURE`, with the missing field and candidate tag list captured in `last_error`.
+- **AC4: Configurable Required vs Optional Facts**
+    - Given some canonical facts may be legitimately unavailable for certain companies or periods,
+    - When defining the mapping rules,
+    - Then the engine must explicitly distinguish required facts from optional facts instead of treating every missing value the same way.
+- **AC5: Regression Tests for Guardrail Behavior**
+    - Add tests proving that a missing required mapping fails before persistence, records parse-stage diagnostics, and leaves the database persistence store untouched.
+    - Add tests proving that a missing optional mapping still produces a valid `FinancialMetric` with `None` for that optional field.

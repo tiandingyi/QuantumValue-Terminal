@@ -174,9 +174,15 @@ class USProvider:
         """
         return extract_requested_financials(company_facts)
 
-    def parse_financial_metric(self, company_facts: dict) -> FinancialMetric:
+    def parse_financial_metric(
+        self,
+        company_facts: dict,
+        *,
+        ticker: Optional[str] = None,
+        cik: Optional[str] = None,
+    ) -> FinancialMetric:
         """Parse raw SEC company facts into the standardized FinancialMetric model."""
-        return parse_financial_metric(company_facts)
+        return parse_financial_metric(company_facts, ticker=ticker, cik=cik)
 
     def _load_ticker_map(self) -> dict[str, CompanyLookup]:
         """Cache the SEC ticker mapping file so repeated lookups avoid extra network calls."""

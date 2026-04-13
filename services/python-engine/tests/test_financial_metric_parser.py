@@ -1,7 +1,7 @@
 import logging
 
 from app.models.financial_metric import FinancialMetric
-from app.parsers.financial_metric_parser import parse_financial_metric
+from app.parsers.financial_metric_parser import FinancialMetricMappingError, parse_financial_metric
 
 
 def test_parse_financial_metric_maps_synonym_tags() -> None:
@@ -83,14 +83,65 @@ def test_parse_financial_metric_normalizes_abbreviated_units() -> None:
                     },
                 }
             }
-        }
+        },
+        required_fields=["revenue", "net_income"],
     )
 
     assert model.net_income == 15_000_000
     assert model.revenue == 2_000_000_000
 
 
-def test_parse_financial_metric_handles_missing_metrics_with_warning(caplog) -> None:
+def test_parse_financial_metric_raises_for_missing_required_metric(caplog) -> None:
+    caplog.set_level(logging.WARNING)
+
+    try:
+        parse_financial_metric(
+            {
+                "facts": {
+                    "us-gaap": {
+                        "Revenues": {
+                            "units": {
+                                "USD": [
+                                    {
+                                        "end": "2025-12-31",
+                                        "filed": "2026-02-01",
+                                        "form": "10-K",
+                                        "fp": "FY",
+                                        "fy": 2025,
+                                        "val": 1000,
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                }
+            },
+            ticker="MISSING",
+            cik="0000000001",
+            required_fields=["revenue", "net_income"],
+        )
+    except FinancialMetricMappingError as exc:
+        assert exc.field_name == "net_income"
+        assert exc.candidate_tags == ["NetIncomeLoss", "ProfitLoss"]
+        assert exc.ticker == "MISSING"
+        assert exc.cik == "0000000001"
+        assert exc.period_context == {
+            "end": "2025-12-31",
+            "filed": "2026-02-01",
+            "form": "10-K",
+            "fy": 2025,
+            "fp": "FY",
+        }
+        assert "net_income" in str(exc)
+        assert "NetIncomeLoss" in str(exc)
+        assert "0000000001" in str(exc)
+    else:
+        raise AssertionError("Expected missing required metric to raise FinancialMetricMappingError")
+
+    assert "missing metric 'net_income'" in caplog.text.lower()
+
+
+def test_parse_financial_metric_handles_missing_optional_metrics_with_warning(caplog) -> None:
     caplog.set_level(logging.WARNING)
 
     model = parse_financial_metric(
@@ -108,7 +159,8 @@ def test_parse_financial_metric_handles_missing_metrics_with_warning(caplog) -> 
                     },
                 }
             }
-        }
+        },
+        required_fields=["revenue", "net_income"],
     )
 
     assert model.capex is None
