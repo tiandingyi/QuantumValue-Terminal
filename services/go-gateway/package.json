@@ -6,6 +6,7 @@
     "build": "go build ./cmd/api",
     "db:check": "go run ./cmd/dbcheck",
     "lint": "test -z \"$(find cmd -name '*.go' -print0 | xargs -0 gofmt -l)\"",
+    "sqlc:generate": "GOCACHE=${GOCACHE:-/tmp/qvt-go-build-cache} go run github.com/sqlc-dev/sqlc/cmd/sqlc@v1.30.0 generate",
     "test": "go test ./..."
   }
 }

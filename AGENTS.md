@@ -1,6 +1,8 @@
 # IMPORTANT:
 # Always read memory-bank/PRD.md before writing any code.
 # Always read memory-bank/tech-stack.md before writing any code.
+# Before starting any sprint card or user story, explicitly align the card against memory-bank/PRD.md and memory-bank/tech-stack.md, and treat architectural choices in those files as hard constraints.
+# If the card appears to conflict with the PRD or tech stack, stop and reconcile the implementation plan before coding instead of silently choosing a different approach.
 # If a database schema file exists, read it before changing persistence logic.
 # After adding a major feature or completing a milestone, update memory-bank/progress.md.
 

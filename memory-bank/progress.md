@@ -87,3 +87,10 @@
   - Updated the sync pipeline to pass company identity into the parser so parse-stage diagnostics are traceable.
   - Preserved optional fact tolerance while preventing required mapping failures from reaching filing or metrics persistence.
   - Added regression tests covering required mapping failures, optional missing facts, parse-stage failure status updates, and no partial persistence.
+- Completed Sprint 3 User Story 1 Go Gateway sqlc financials pass-through API:
+  - Reconciled the Sprint 3 story definitions so the first card is the PRD-mandated Go Gateway sqlc pass-through layer, followed by derived metrics, valuation, and frontend visualization cards.
+  - Added sqlc configuration, query files, and generated Go query code for `companies`, `filings`, `financial_metrics`, and `sync_status`.
+  - Refactored the Go PostgreSQL financials store to use sqlc-generated `Queries` instead of hand-written row scanning in route/store code.
+  - Added `GET /api/v1/financials/:ticker` with case-insensitive ticker lookup, JSONB base/derived metric pass-through, and cache-miss triggering of the Python sync path.
+  - Updated `GET /api/v1/status/:ticker` to prefer database-backed `SEC_SYNC` rows while preserving the Python proxy fallback for handshake compatibility.
+  - Added Go regression tests for cached JSONB responses, invalid tickers, cache-miss sync triggering, database read failures, and database-backed in-progress status polling.

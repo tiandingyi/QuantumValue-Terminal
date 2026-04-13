@@ -278,3 +278,63 @@ User Story 6: CI-Driven Supabase Initialization
 - **AC5: Regression Tests for Guardrail Behavior**
     - Add tests proving that a missing required mapping fails before persistence, records parse-stage diagnostics, and leaves the database persistence store untouched.
     - Add tests proving that a missing optional mapping still produces a valid `FinancialMetric` with `None` for that optional field.
+
+### **Sprint 3: Analysis, Query, and Visualization - User Stories**
+
+---
+
+**User Story 1: Go Gateway High-Speed Data Pass-Through with sqlc**
+
+**Role:** Backend Engineer
+**Requirement:** I want the Go Gateway to expose secure, read-only RESTful endpoints using sqlc-generated PostgreSQL query code. The gateway must connect to the database purely via environment variables such as `DATABASE_URL`, remain agnostic to local PostgreSQL versus cloud Supabase, and fetch time-series `base_metrics` and `derived_metrics` JSONB payloads.
+**Reason:** To ensure architectural portability for local offline development while using PRD-mandated sqlc types for fast, reliable JSONB pass-through into the Next.js frontend.
+
+**Acceptance Criteria:**
+
+- The Go codebase contains zero Supabase-specific SDKs or database logic.
+- The Go database access layer uses sqlc-generated `Queries`; hand-written row scanning in route/store code is prohibited.
+- The repository includes sqlc configuration plus query files so generated query code can be refreshed consistently.
+- Environment configuration allows seamless switching between local and production PostgreSQL connection strings via env files.
+- The Go Gin gateway implements a financials endpoint such as `GET /api/v1/financials/:ticker` that validates and resolves the ticker case-insensitively.
+- The endpoint reads PostgreSQL JSONB columns from `financial_metrics.base_metrics` and `financial_metrics.derived_metrics` through sqlc and directly marshals them into a structured JSON response for the Next.js client.
+- On a cache miss, the endpoint triggers the Python sync path and returns an accepted mining response instead of fabricating empty financial rows.
+- `GET /api/v1/status/:ticker` prefers database-backed `SEC_SYNC` status rows and preserves `202 Accepted` for `PENDING` or `IN_PROGRESS` states.
+- Go regression tests prove cached JSONB pass-through, invalid ticker rejection, cache-miss sync triggering, database error handling, and database-backed status polling.
+
+**User Story 2: Derived Value Metrics Engine**
+
+**Role:** Financial Analyst / Data Engineer
+**Requirement:** I want the Python engine to automatically calculate derived financial metrics such as Free Cash Flow, Owner Earnings, ROE, Gross Margin, and 10-Year CAGR from the `base_metrics` JSONB payload, and persist them into the `derived_metrics` JSONB column.
+**Reason:** To translate raw SEC accounting DNA into standardized fundamental business indicators necessary for assessing a company's economic moat and intrinsic value.
+
+**Acceptance Criteria:**
+
+- The Python engine implements a calculation pipeline that triggers after base metrics are successfully parsed.
+- The system accurately calculates Owner Earnings by adjusting net income for depreciation, amortization, and capital expenditures.
+- The generated derived metrics are isolated and stored within the `derived_metrics` JSONB column in the `financial_metrics` table.
+- Missing base facts gracefully skip dependent derived calculations without halting the overall pipeline.
+
+**User Story 3: Quantitative Valuation Filter**
+
+**Role:** Quant Developer
+**Requirement:** I want the Python engine to implement a custom valuation formula evaluating `(10-Year CAGR + 10-Year Average Tax-After Dividend Yield) / Current Static PE`. It must also calculate historical P/E percentiles, specifically flagging targets positioned above the 80th percentile.
+**Reason:** To programmatically filter the top 2% of companies with durable business models, ensuring selected targets represent a wide expected margin of safety and a high-certainty investment return.
+
+**Acceptance Criteria:**
+
+- The engine accurately aggregates 10-year historical data to compute CAGR for net profit and average dividend yield.
+- The system computes current Static PE and evaluates the core formula, flagging any company where the resulting ratio is greater than 1.5.
+- The system tracks historical P/E ratios and calculates the current P/E percentile relative to the company's historical baseline, raising a flag when it exceeds the 80th percentile.
+- Valuation flags and scores are appended to a dedicated section within `derived_metrics`.
+
+**User Story 4: Frontend "Archaeology" Visualization**
+
+**Role:** Frontend Developer
+**Requirement:** I want to build a React Server Component or client-side Chart.js module in the Next.js app that consumes the Go Gateway financials endpoint to render a 10-year financial trend dashboard.
+**Reason:** To provide a professional, ready-to-use visual interface that synthesizes complex numerical data into clear graphical trends for immediate fundamental analysis.
+
+**Acceptance Criteria:**
+
+- The Next.js UI features a dashboard layout displaying at least two Chart.js time-series graphs, such as Revenue vs. Net Income and Free Cash Flow.
+- The UI displays a prominent Valuation Scorecard showing the target's current P/E Percentile, Owner Earnings, and Quantitative Formula Score.
+- The component correctly handles loading states and displays a graceful fallback if the 10-year historical data is incomplete.

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"log"
 	"net/http"
@@ -35,10 +36,16 @@ type syncResponse struct {
 	UpdatedAt string `json:"updated_at"`
 }
 
+var proxyEngineRequestFunc = proxyEngineRequest
+
 func main() {
 	port := getEnv("PORT", "8080")
 	engineBaseURL := getEnv("ENGINE_BASE_URL", "http://localhost:8000")
-	router := setupRouter(engineBaseURL)
+	store := openFinancialsStoreFromEnv()
+	if store != nil {
+		defer store.Close()
+	}
+	router := setupRouterWithStore(engineBaseURL, store)
 
 	log.Printf("api-go listening on :%s", port)
 	if err := router.Run(":" + port); err != nil {
@@ -47,6 +54,10 @@ func main() {
 }
 
 func setupRouter(engineBaseURL string) *gin.Engine {
+	return setupRouterWithStore(engineBaseURL, nil)
+}
+
+func setupRouterWithStore(engineBaseURL string, store financialsStore) *gin.Engine {
 	gin.SetMode(gin.ReleaseMode)
 
 	router := gin.New()
@@ -99,7 +110,7 @@ func setupRouter(engineBaseURL string) *gin.Engine {
 			return
 		}
 
-		statusCode, payload, err := proxyEngineRequest(c.Request.Context(), http.MethodPost, engineBaseURL+"/sync/"+strings.ToUpper(ticker), nil)
+		statusCode, payload, err := proxyEngineRequestFunc(c.Request.Context(), http.MethodPost, engineBaseURL+"/sync/"+strings.ToUpper(ticker), nil)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{
 				"status":  "ERROR",
@@ -119,7 +130,26 @@ func setupRouter(engineBaseURL string) *gin.Engine {
 			return
 		}
 
-		statusCode, payload, err := proxyEngineRequest(c.Request.Context(), http.MethodGet, engineBaseURL+"/status/"+strings.ToUpper(ticker), nil)
+		if store != nil {
+			payload, err := store.GetSyncStatus(c.Request.Context(), strings.ToUpper(ticker))
+			if err == nil {
+				statusCode := http.StatusOK
+				if payload.Status == "IN_PROGRESS" || payload.Status == "PENDING" {
+					statusCode = http.StatusAccepted
+				}
+				c.JSON(statusCode, payload)
+				return
+			}
+			if !errors.Is(err, errSyncStatusNotFound) {
+				c.JSON(http.StatusServiceUnavailable, gin.H{
+					"status":  "ERROR",
+					"message": "Unable to read sync status from the database.",
+				})
+				return
+			}
+		}
+
+		statusCode, payload, err := proxyEngineRequestFunc(c.Request.Context(), http.MethodGet, engineBaseURL+"/status/"+strings.ToUpper(ticker), nil)
 		if err != nil {
 			c.JSON(http.StatusBadGateway, gin.H{
 				"status":  "ERROR",
@@ -131,7 +161,70 @@ func setupRouter(engineBaseURL string) *gin.Engine {
 		c.Data(statusCode, "application/json", payload)
 	})
 
+	router.GET("/api/v1/financials/:ticker", func(c *gin.Context) {
+		ticker := c.Param("ticker")
+		if !isValidTicker(ticker) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid ticker"})
+			return
+		}
+
+		normalizedTicker := strings.ToUpper(ticker)
+		if store == nil {
+			statusCode, payload, err := proxyEngineRequestFunc(c.Request.Context(), http.MethodPost, engineBaseURL+"/sync/"+normalizedTicker, nil)
+			if err != nil {
+				c.JSON(http.StatusServiceUnavailable, gin.H{
+					"status":  "ERROR",
+					"message": "Financials database is not configured and the Python engine is unavailable.",
+				})
+				return
+			}
+			c.Data(statusCode, "application/json", payload)
+			return
+		}
+
+		payload, err := store.GetFinancials(c.Request.Context(), normalizedTicker)
+		if err == nil {
+			c.JSON(http.StatusOK, payload)
+			return
+		}
+		if !errors.Is(err, errFinancialsNotFound) {
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"status":  "ERROR",
+				"message": "Unable to read financial metrics from the database.",
+			})
+			return
+		}
+
+		statusCode, enginePayload, proxyErr := proxyEngineRequestFunc(c.Request.Context(), http.MethodPost, engineBaseURL+"/sync/"+normalizedTicker, nil)
+		if proxyErr != nil {
+			c.JSON(http.StatusAccepted, gatewaySyncResponse{
+				Ticker:    normalizedTicker,
+				Status:    "IN_PROGRESS",
+				Message:   "No cached financial DNA yet. Start a sync and poll status once the Python engine is available.",
+				UpdatedAt: time.Now().UTC().Format(time.RFC3339),
+			})
+			return
+		}
+
+		c.Data(statusCode, "application/json", enginePayload)
+	})
+
 	return router
+}
+
+func openFinancialsStoreFromEnv() financialsStore {
+	databaseURL := os.Getenv("DATABASE_URL")
+	if databaseURL == "" {
+		log.Printf("DATABASE_URL is not set; financials endpoint will trigger engine syncs without database reads")
+		return nil
+	}
+
+	store, err := newPostgresFinancialsStore(databaseURL)
+	if err != nil {
+		log.Printf("database connection unavailable; financials endpoint will trigger engine syncs without database reads: %v", err)
+		return nil
+	}
+	return store
 }
 
 func buildCORSConfig() gincors.Config {
