@@ -67,8 +67,24 @@ export type FilingRow = {
   ownerEarnings: string;
 };
 
+export function selectDisplayFilings(financials: FinancialsResponse): FilingSnapshot[] {
+  const annualFilings = financials.filings.filter((filing) => filing.form_type === "10-K");
+  const annualYears = new Set(annualFilings.map((filing) => filing.period_end_date.slice(0, 4)));
+  const latestFiling = financials.filings[0];
+
+  if (!latestFiling) {
+    return [];
+  }
+
+  const latestYear = latestFiling.period_end_date.slice(0, 4);
+  const includeLatestQuarter = latestFiling.form_type !== "10-K" && !annualYears.has(latestYear);
+  const selected = includeLatestQuarter ? [latestFiling, ...annualFilings] : annualFilings;
+
+  return selected.sort((left, right) => right.period_end_date.localeCompare(left.period_end_date));
+}
+
 export function buildTrendPoints(financials: FinancialsResponse): TrendPoint[] {
-  return financials.filings
+  return selectDisplayFilings(financials)
     .map((filing) => ({
       label: formatPeriodLabel(filing),
       revenue: numberField(filing.base_metrics.revenue),
@@ -80,7 +96,7 @@ export function buildTrendPoints(financials: FinancialsResponse): TrendPoint[] {
 }
 
 export function buildScorecard(financials: FinancialsResponse): ScorecardMetric[] {
-  const latest = financials.filings[0];
+  const latest = selectDisplayFilings(financials)[0];
   if (!latest) {
     return [];
   }
@@ -139,7 +155,7 @@ export function buildScorecard(financials: FinancialsResponse): ScorecardMetric[
 }
 
 export function buildFilingRows(financials: FinancialsResponse): FilingRow[] {
-  return financials.filings.slice(0, 20).map((filing) => ({
+  return selectDisplayFilings(financials).slice(0, 20).map((filing) => ({
     period: formatPeriodLabel(filing),
     formType: filing.form_type,
     filedAt: filing.filed_at,
@@ -164,17 +180,33 @@ function numberField(value: unknown): number | null {
 }
 
 function formatCurrency(value: number | null): string {
+  return formatCompactCurrency(value, "US$");
+}
+
+export function formatChartCurrency(value: number | null): string {
+  return formatCompactCurrency(value, "$");
+}
+
+function formatCompactCurrency(value: number | null, prefix: string): string {
   if (value === null) {
     return "Pending";
   }
   const absolute = Math.abs(value);
+  const sign = value < 0 ? "-" : "";
   if (absolute >= 1_000_000_000) {
-    return `$${(value / 1_000_000_000).toFixed(1)}B`;
+    return `${sign}${prefix}${trimTrailingZero(absolute / 1_000_000_000)}B`;
   }
   if (absolute >= 1_000_000) {
-    return `$${(value / 1_000_000).toFixed(1)}M`;
+    return `${sign}${prefix}${trimTrailingZero(absolute / 1_000_000)}M`;
   }
-  return `$${value.toFixed(0)}`;
+  if (absolute >= 1_000) {
+    return `${sign}${prefix}${trimTrailingZero(absolute / 1_000)}K`;
+  }
+  return `${sign}${prefix}${absolute.toFixed(0)}`;
+}
+
+function trimTrailingZero(value: number): string {
+  return value.toFixed(1).replace(/\.0$/, "");
 }
 
 function formatPercent(value: number | null): string {
@@ -186,13 +218,8 @@ function formatPercent(value: number | null): string {
 
 function formatPeriodLabel(filing: FilingSnapshot): string {
   if (filing.form_type === "10-K") {
-    return `${filing.period_end_date.slice(0, 4)} FY`;
+    return `${filing.period_end_date.slice(0, 4)} 10-K`;
   }
 
-  const month = Number(filing.period_end_date.slice(5, 7));
-  if (!Number.isFinite(month) || month < 1 || month > 12) {
-    return filing.period_end_date.slice(0, 4);
-  }
-  const quarter = Math.floor((month - 1) / 3) + 1;
-  return `${filing.period_end_date.slice(0, 4)} Q${quarter}`;
+  return `${filing.period_end_date.slice(0, 4)} latest 10-Q`;
 }

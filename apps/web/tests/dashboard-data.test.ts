@@ -8,6 +8,7 @@ import {
   buildScorecard,
   buildTrendPoints,
   hasIncompleteHistory,
+  selectDisplayFilings,
 } from "../lib/financials";
 
 test("dashboard data includes metric cards and a matching price series", () => {
@@ -23,6 +24,20 @@ test("financials helpers build chart points and scorecard values", () => {
     status: "ready",
     updated_at: "2026-04-13T00:00:00Z",
     filings: [
+      {
+        form_type: "10-Q",
+        period_end_date: "2027-03-31",
+        filed_at: "2027-05-01",
+        accession_number: "q",
+        updated_at: "2027-05-02T00:00:00Z",
+        base_metrics: {
+          revenue: 800,
+          net_income: 90,
+        },
+        derived_metrics: {
+          free_cash_flow: { name: "Free Cash Flow", value: 80, unit: "USD", end: "2027-03-31", filed: null },
+        },
+      },
       {
         form_type: "10-K",
         period_end_date: "2026-09-30",
@@ -64,19 +79,26 @@ test("financials helpers build chart points and scorecard values", () => {
     ],
   };
 
+  const selectedFilings = selectDisplayFilings(financials);
+  assert.deepEqual(
+    selectedFilings.map((filing) => filing.form_type),
+    ["10-Q", "10-K", "10-K"],
+  );
+
   const points = buildTrendPoints(financials);
-  assert.deepEqual(points.map((point) => point.label), ["2025 FY", "2026 FY"]);
+  assert.deepEqual(points.map((point) => point.label), ["2025 10-K", "2026 10-K", "2027 latest 10-Q"]);
   assert.equal(points[1].freeCashFlow, 250);
   assert.equal(hasIncompleteHistory(points), true);
 
   const scorecard = buildScorecard(financials);
   assert.equal(scorecard[0].label, "Revenue");
-  assert.equal(scorecard[0].value, "$2000");
+  assert.equal(scorecard[0].value, "US$800");
   assert.equal(scorecard[2].label, "Free Cash Flow");
-  assert.equal(scorecard[2].value, "$250");
-  assert.equal(scorecard[4].value, "40.0%");
+  assert.equal(scorecard[2].value, "US$80");
 
   const rows = buildFilingRows(financials);
-  assert.equal(rows[0].period, "2026 FY");
-  assert.equal(rows[0].ownerEarnings, "$220");
+  assert.equal(rows[0].period, "2027 latest 10-Q");
+  assert.equal(rows[0].revenue, "US$800");
+  assert.equal(rows[1].period, "2026 10-K");
+  assert.equal(rows[1].ownerEarnings, "US$220");
 });

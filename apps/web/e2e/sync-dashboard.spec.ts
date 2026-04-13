@@ -33,9 +33,12 @@ test("syncing COST updates the dashboard and renders historical filing data", as
   const filingHistory = page.getByTestId("filing-history");
   await expect(filingHistory).toBeVisible();
   await expect(filingHistory.getByRole("columnheader", { name: "Period" })).toBeVisible();
-  await expect(filingHistory.getByRole("columnheader", { name: "Revenue" })).toBeVisible();
-  await expect(filingHistory.getByText("2026 Q1")).toBeVisible();
-  await expect(filingHistory.getByText("2025 FY")).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Report" })).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Revenue USD" })).toBeVisible();
+  await expect(filingHistory.getByText("2026 latest 10-Q")).toBeVisible();
+  await expect(filingHistory.getByText("2025 10-K")).toBeVisible();
+  await expect(filingHistory.getByText("2025 latest 10-Q")).toHaveCount(0);
+  await expect(filingHistory.getByText(/US\$\d+(\.\d+)?B/).first()).toBeVisible();
 
   await page.screenshot({
     path: "../../output/playwright/sync-dashboard-cost.png",

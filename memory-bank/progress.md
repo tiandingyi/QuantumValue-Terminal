@@ -126,3 +126,8 @@
   - Fixed the dashboard refresh path so a cold ticker that initially returns `202 mining` refetches financials after sync completion instead of staying on the mining fallback.
   - Made status polling observable immediately after a sync starts, instead of waiting for the first timer interval.
   - Captured successful E2E evidence at `output/playwright/sync-dashboard-cost.png`.
+- Refined the frontend filing display policy:
+  - The dashboard now displays annual 10-K history by default and includes only the latest 10-Q when the newest fiscal year does not yet have a 10-K.
+  - Intermediate quarterly rows are filtered out of the chart, scorecard, and filing table so the long-term view stays annual-first.
+  - Money values now use compact USD formatting such as `US$136.9B` and chart axis labels use abbreviated dollar units.
+  - Browser E2E now asserts the annual-first policy and compact money display against the live COST page.

@@ -19,6 +19,7 @@ import {
   buildFilingRows,
   buildScorecard,
   buildTrendPoints,
+  formatChartCurrency,
   hasIncompleteHistory,
 } from "@/lib/financials";
 
@@ -61,7 +62,10 @@ const chartOptions: ChartOptions<"line"> = {
     },
     y: {
       grid: { color: "rgba(148, 163, 184, 0.08)" },
-      ticks: { color: "#64748b" },
+      ticks: {
+        color: "#64748b",
+        callback: (value) => formatChartCurrency(typeof value === "number" ? value : Number(value)),
+      },
       border: { display: false },
     },
   },
@@ -215,7 +219,7 @@ export function ArchaeologyDashboard({ activeTicker, refreshToken }: Archaeology
 
             {incompleteHistory ? (
               <div className="mt-5 border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
-                {trendPoints.length} filing period{trendPoints.length === 1 ? "" : "s"} loaded. Sync stores the latest supported SEC filings first; long-range trend context sharpens as more periods are cached.
+                Showing annual 10-K history plus the latest 10-Q when the newest year has not filed a 10-K yet. More annual points will appear as filings are cached.
               </div>
             ) : null}
 
@@ -234,17 +238,19 @@ export function ArchaeologyDashboard({ activeTicker, refreshToken }: Archaeology
                 <thead className="border-b border-white/10 text-xs uppercase tracking-[0.22em] text-slate-500">
                   <tr>
                     <th className="px-4 py-3 font-medium">Period</th>
+                    <th className="px-4 py-3 font-medium">Report</th>
                     <th className="px-4 py-3 font-medium">Filed</th>
-                    <th className="px-4 py-3 font-medium">Revenue</th>
-                    <th className="px-4 py-3 font-medium">Net Income</th>
-                    <th className="px-4 py-3 font-medium">FCF</th>
-                    <th className="px-4 py-3 font-medium">Owner Earnings</th>
+                    <th className="px-4 py-3 font-medium">Revenue USD</th>
+                    <th className="px-4 py-3 font-medium">Net Income USD</th>
+                    <th className="px-4 py-3 font-medium">FCF USD</th>
+                    <th className="px-4 py-3 font-medium">Owner Earnings USD</th>
                   </tr>
                 </thead>
                 <tbody>
                   {filingRows.map((row) => (
                     <tr key={`${row.period}-${row.filedAt}`} className="border-b border-white/5 last:border-0">
                       <td className="px-4 py-3 font-mono text-cyan-glow">{row.period}</td>
+                      <td className="px-4 py-3 text-slate-400">{row.formType}</td>
                       <td className="px-4 py-3 text-slate-400">{row.filedAt}</td>
                       <td className="px-4 py-3 text-slate-200">{row.revenue}</td>
                       <td className="px-4 py-3 text-slate-200">{row.netIncome}</td>
