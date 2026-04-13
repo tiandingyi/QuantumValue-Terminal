@@ -14,9 +14,10 @@ const apiBaseURL = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:808
 type SearchBarProps = {
   activeTicker: string;
   onTickerSelected: (ticker: string) => void;
+  onSyncComplete: (ticker: string) => void;
 };
 
-export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
+export function SearchBar({ activeTicker, onTickerSelected, onSyncComplete }: SearchBarProps) {
   const [ticker, setTicker] = useState(activeTicker);
   const [syncStatus, setSyncStatus] = useState<SyncPayload | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -40,7 +41,8 @@ export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
       clearInterval(intervalRef.current);
     }
 
-    intervalRef.current = setInterval(async () => {
+    let isComplete = false;
+    const checkStatus = async () => {
       try {
         const response = await fetch(`${apiBaseURL}/api/v1/status/${activeTicker}`, {
           method: "GET",
@@ -50,7 +52,9 @@ export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
         setSyncStatus(payload);
 
         if (response.status === 200 || payload.status === "SUCCESS") {
+          isComplete = true;
           onTickerSelected(activeTicker);
+          onSyncComplete(activeTicker);
           if (intervalRef.current) {
             clearInterval(intervalRef.current);
           }
@@ -63,7 +67,12 @@ export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
         setIsSubmitting(false);
         setError("Polling failed. Check that the Go gateway and Python engine are running.");
       }
-    }, 1500);
+    };
+
+    await checkStatus();
+    if (!isComplete) {
+      intervalRef.current = setInterval(checkStatus, 1500);
+    }
   }
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
@@ -98,6 +107,7 @@ export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
       }
 
       setIsSubmitting(false);
+      onSyncComplete(normalizedTicker);
     } catch (submitError) {
       setIsSubmitting(false);
       setError(
@@ -133,6 +143,7 @@ export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
               <path strokeLinecap="round" strokeLinejoin="round" d="m21 21-4.35-4.35M10.75 18a7.25 7.25 0 1 1 0-14.5 7.25 7.25 0 0 1 0 14.5Z" />
             </svg>
             <input
+              aria-label="Ticker symbol"
               type="text"
               value={ticker}
               onChange={(event) => setTicker(event.target.value)}
@@ -141,6 +152,7 @@ export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
             />
             <button
               type="submit"
+              aria-label="Sync ticker"
               disabled={isSubmitting}
               className="cursor-pointer rounded-xl border border-cyan-glow/30 bg-cyan-glow/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.24em] text-cyan-glow transition hover:bg-cyan-glow/20 disabled:cursor-not-allowed disabled:opacity-60"
             >

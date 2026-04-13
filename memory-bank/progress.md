@@ -121,3 +121,8 @@
   - Requires real-browser operation against the local Docker stack before closing frontend-facing cards.
   - Makes ticker input, Sync click behavior, Go Gateway traffic, active ticker changes, historical table population, loading states, cursor affordance, and stale default-copy checks explicit acceptance criteria.
   - Requires screenshot/trace or browser snapshot evidence; API-only verification is no longer sufficient for UI sync flows.
+- Completed the first browser-backed frontend correction pass:
+  - Added Playwright E2E coverage for the real `cost` Sync flow against the Docker-served Next.js app.
+  - Fixed the dashboard refresh path so a cold ticker that initially returns `202 mining` refetches financials after sync completion instead of staying on the mining fallback.
+  - Made status polling observable immediately after a sync starts, instead of waiting for the first timer interval.
+  - Captured successful E2E evidence at `output/playwright/sync-dashboard-cost.png`.

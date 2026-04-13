@@ -69,9 +69,10 @@ const chartOptions: ChartOptions<"line"> = {
 
 type ArchaeologyDashboardProps = {
   activeTicker: string;
+  refreshToken: number;
 };
 
-export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps) {
+export function ArchaeologyDashboard({ activeTicker, refreshToken }: ArchaeologyDashboardProps) {
   const [financials, setFinancials] = useState<FinancialsResponse | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,6 +83,7 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
     async function loadFinancials() {
       setIsLoading(true);
       setError(null);
+      setFinancials(null);
 
       try {
         const response = await fetch(`${apiBaseURL}/api/v1/financials/${activeTicker}`, {
@@ -124,7 +126,7 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
     return () => {
       isMounted = false;
     };
-  }, [activeTicker]);
+  }, [activeTicker, refreshToken]);
 
   const trendPoints = useMemo(() => (financials ? buildTrendPoints(financials) : []), [financials]);
   const scorecard = useMemo(() => (financials ? buildScorecard(financials) : []), [financials]);
@@ -179,7 +181,7 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
   );
 
   return (
-    <section className="animate-rise px-4 md:px-8" style={{ animationDelay: "160ms" }}>
+    <section className="animate-rise px-4 md:px-8" data-testid="archaeology-dashboard" style={{ animationDelay: "160ms" }}>
       <div className="mx-auto max-w-6xl border-y border-white/10 py-7 md:py-9">
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
           <div>
@@ -191,7 +193,7 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
               Revenue, earnings, cash generation, and balance sheet signals from the Go Gateway JSONB feed.
             </p>
           </div>
-          <div className="border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-300">
+          <div className="border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-300" data-testid="active-ticker">
             Active ticker: <span className="font-mono text-cyan-glow">{activeTicker}</span>
           </div>
         </div>
@@ -227,7 +229,7 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
               ))}
             </div>
 
-            <div className="mt-8 overflow-x-auto border border-white/10 bg-black/15">
+            <div className="mt-8 overflow-x-auto border border-white/10 bg-black/15" data-testid="filing-history">
               <table className="min-w-full border-collapse text-left text-sm">
                 <thead className="border-b border-white/10 text-xs uppercase tracking-[0.22em] text-slate-500">
                   <tr>
