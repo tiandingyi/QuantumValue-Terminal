@@ -1,6 +1,6 @@
 from app.models.financial_metric import FinancialMetric
 from app.persistence.filing_metadata import extract_latest_supported_filing
-from app.providers.sec_types import CompanyLookup, DerivedMetric
+from app.providers.sec_types import DerivedMetric
 
 
 def test_extract_latest_supported_filing_picks_latest_supported_form() -> None:
@@ -52,3 +52,15 @@ def test_derived_metric_payload_is_separable_from_base_payload() -> None:
 
     assert derived["fcf"].source == "OperatingCashFlow - Capex"
     assert derived["fcf"].value == 123.0
+
+
+def test_derived_metrics_can_include_valuation_section() -> None:
+    derived = {
+        "valuation": {
+            "status": "ready",
+            "scores": {"valuation_formula": 1.6},
+            "flags": {"formula_gt_1_5": True},
+        }
+    }
+
+    assert derived["valuation"]["scores"]["valuation_formula"] == 1.6

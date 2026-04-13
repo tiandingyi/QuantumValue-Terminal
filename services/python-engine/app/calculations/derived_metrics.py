@@ -64,7 +64,7 @@ def calculate_derived_metrics(
             source="gross_profit / revenue",
         )
 
-    revenue_cagr = _ten_year_cagr("revenue", historical_base_metrics or [base_metrics])
+    revenue_cagr = ten_year_cagr("revenue", historical_base_metrics or [base_metrics])
     if revenue_cagr is not None:
         results["revenue_10y_cagr"] = DerivedMetric(
             name="10-Year Revenue CAGR",
@@ -97,7 +97,7 @@ def _safe_ratio(numerator: Optional[float], denominator: Optional[float]) -> Opt
     return float(numerator) / float(denominator)
 
 
-def _ten_year_cagr(field_name: str, historical_base_metrics: Iterable[FinancialMetric]) -> Optional[float]:
+def ten_year_cagr(field_name: str, historical_base_metrics: Iterable[FinancialMetric]) -> Optional[float]:
     sorted_metrics = sorted(
         (
             metric

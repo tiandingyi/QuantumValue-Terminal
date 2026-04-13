@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from dataclasses import asdict
+from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from typing import Any, Optional
 
@@ -10,7 +10,7 @@ from sqlalchemy.dialects.postgresql import insert
 from app.models.financial_metric import FinancialMetric
 from app.persistence.store import PersistenceStore
 from app.persistence.types import FilingMetadata
-from app.providers.sec_types import CompanyLookup, DerivedMetric
+from app.providers.sec_types import CompanyLookup
 
 
 class SQLAlchemyPersistenceStore(PersistenceStore):
@@ -58,7 +58,7 @@ class SQLAlchemyPersistenceStore(PersistenceStore):
         company: CompanyLookup,
         filing: FilingMetadata,
         base_metrics: FinancialMetric,
-        derived_metrics: dict[str, DerivedMetric],
+        derived_metrics: dict[str, Any],
     ) -> dict[str, Any]:
         company_id = self._upsert_company(company)
         filing_id = self._upsert_filing(company_id, filing)
@@ -147,10 +147,10 @@ class SQLAlchemyPersistenceStore(PersistenceStore):
         self,
         filing_id: Any,
         base_metrics: FinancialMetric,
-        derived_metrics: dict[str, DerivedMetric],
+        derived_metrics: dict[str, Any],
     ) -> Any:
         base_payload = base_metrics.model_dump(mode="json")
-        derived_payload = {metric_name: asdict(metric) for metric_name, metric in derived_metrics.items()}
+        derived_payload = {metric_name: _json_ready(metric) for metric_name, metric in derived_metrics.items()}
 
         statement = insert(self._financial_metrics).values(
             filing_id=filing_id,
@@ -178,3 +178,13 @@ def _derive_period_label(form_type: str, period_end_month: int) -> str:
         return "FY"
     quarter = ((period_end_month - 1) // 3) + 1
     return f"Q{quarter}"
+
+
+def _json_ready(value: Any) -> Any:
+    if is_dataclass(value):
+        return asdict(value)
+    if isinstance(value, dict):
+        return {key: _json_ready(nested_value) for key, nested_value in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_ready(item) for item in value]
+    return value

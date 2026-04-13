@@ -52,7 +52,7 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
 
         def list_base_metric_history(self, company):
             return [
-                FinancialMetric(period_end="2016-01-25", revenue=100),
+                FinancialMetric(period_end="2016-01-25", revenue=100, net_income=100),
             ]
 
     class FakeProvider:
@@ -143,6 +143,9 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
         (2000 / 100) ** (1 / 10) - 1,
         3,
     )
+    assert fake_store.persisted_derived_metrics["valuation"]["status"] == "skipped"
+    assert "current_static_pe" in fake_store.persisted_derived_metrics["valuation"]["missing_inputs"]
+    assert "net_income_10y_history" not in fake_store.persisted_derived_metrics["valuation"]["missing_inputs"]
     assert fake_store.statuses == [
         ("NVDA", "SEC_SYNC", "PENDING", None),
         ("NVDA", "SEC_SYNC", "IN_PROGRESS", None),

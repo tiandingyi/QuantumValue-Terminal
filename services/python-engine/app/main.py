@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, status
 from pydantic import BaseModel
 
 from app.calculations.derived_metrics import calculate_derived_metrics
+from app.calculations.valuation import calculate_valuation_section
 from app.persistence.factory import build_persistence_store
 from app.persistence.filing_metadata import extract_latest_supported_filing
 from app.providers.sec_types import CompanyDataBundle
@@ -98,6 +99,7 @@ async def finish_sync(ticker: str) -> None:
             existing_history = await asyncio.to_thread(store.list_base_metric_history, bundle.company)
             historical_base_metrics = existing_history + [base_metrics]
         derived_metrics = calculate_derived_metrics(base_metrics, historical_base_metrics)
+        derived_metrics["valuation"] = calculate_valuation_section(base_metrics, historical_base_metrics)
         persistence_details: Optional[dict[str, Any]] = None
 
         if store is not None:

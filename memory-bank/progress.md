@@ -99,3 +99,9 @@
   - Updated the FastAPI sync pipeline so derived metrics are calculated immediately after base parsing, with existing historical `base_metrics` loaded from JSONB when available for CAGR, then persisted separately into `derived_metrics`.
   - Preserved base SEC DNA isolation by keeping `base_metrics` untouched and skipping only dependent derived calculations when inputs are missing.
   - Added unit tests for derived formulas, missing-input skip behavior, zero-denominator ratio safety, 10-year CAGR history requirements, and sync persistence handoff.
+- Completed Sprint 3 User Story 3 quantitative valuation filter:
+  - Added a valuation calculation module for net-income 10-year CAGR, average tax-after dividend yield, current static P/E, historical P/E percentile, valuation formula score, and threshold flags.
+  - Kept market-derived inputs explicit so the engine does not fabricate current price, dividend yield, or P/E history when no market data source is configured.
+  - Appended a dedicated `valuation` section inside `derived_metrics`, including skipped/missing-input diagnostics when valuation inputs are unavailable.
+  - Updated persistence serialization so mixed derived metric dataclasses and nested valuation dictionaries are JSONB-ready.
+  - Added unit tests for valuation formula scoring, P/E percentile flagging, formula threshold flagging, missing-input diagnostics, and sync persistence handoff.

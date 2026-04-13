@@ -4,7 +4,7 @@ from typing import Any, Optional, Protocol
 
 from app.models.financial_metric import FinancialMetric
 from app.persistence.types import FilingMetadata
-from app.providers.sec_types import CompanyLookup, DerivedMetric
+from app.providers.sec_types import CompanyLookup
 
 
 class PersistenceStore(Protocol):
@@ -24,7 +24,7 @@ class PersistenceStore(Protocol):
         company: CompanyLookup,
         filing: FilingMetadata,
         base_metrics: FinancialMetric,
-        derived_metrics: dict[str, DerivedMetric],
+        derived_metrics: dict[str, Any],
     ) -> dict[str, Any]:
         ...
 
