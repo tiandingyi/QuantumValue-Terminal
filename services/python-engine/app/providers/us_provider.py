@@ -3,7 +3,7 @@ from __future__ import annotations
 import logging
 import time
 from datetime import datetime, timezone
-from typing import Callable, Optional
+from typing import Any, Callable, Iterable, Optional
 from email.utils import parsedate_to_datetime
 
 import requests
@@ -180,9 +180,17 @@ class USProvider:
         *,
         ticker: Optional[str] = None,
         cik: Optional[str] = None,
+        required_fields: Optional[Iterable[str]] = None,
+        anchor: Optional[dict[str, Any]] = None,
     ) -> FinancialMetric:
         """Parse raw SEC company facts into the standardized FinancialMetric model."""
-        return parse_financial_metric(company_facts, ticker=ticker, cik=cik)
+        return parse_financial_metric(
+            company_facts,
+            ticker=ticker,
+            cik=cik,
+            required_fields=required_fields,
+            anchor=anchor,
+        )
 
     def _load_ticker_map(self) -> dict[str, CompanyLookup]:
         """Cache the SEC ticker mapping file so repeated lookups avoid extra network calls."""

@@ -57,10 +57,20 @@ export type ScorecardMetric = {
   detail: string;
 };
 
+export type FilingRow = {
+  period: string;
+  formType: string;
+  filedAt: string;
+  revenue: string;
+  netIncome: string;
+  freeCashFlow: string;
+  ownerEarnings: string;
+};
+
 export function buildTrendPoints(financials: FinancialsResponse): TrendPoint[] {
   return financials.filings
     .map((filing) => ({
-      label: filing.period_end_date.slice(0, 4),
+      label: formatPeriodLabel(filing),
       revenue: numberField(filing.base_metrics.revenue),
       netIncome: numberField(filing.base_metrics.net_income),
       freeCashFlow: derivedValue(filing, "free_cash_flow"),
@@ -71,38 +81,73 @@ export function buildTrendPoints(financials: FinancialsResponse): TrendPoint[] {
 
 export function buildScorecard(financials: FinancialsResponse): ScorecardMetric[] {
   const latest = financials.filings[0];
-  const valuation = latest?.derived_metrics.valuation as ValuationPayload | undefined;
+  if (!latest) {
+    return [];
+  }
+
+  const revenue = numberField(latest.base_metrics.revenue);
+  const netIncome = numberField(latest.base_metrics.net_income);
+  const freeCashFlow = derivedValue(latest, "free_cash_flow");
   const ownerEarnings = latest ? derivedValue(latest, "owner_earnings") : null;
-  const formulaScore = valuation?.scores?.valuation_formula;
-  const pePercentile = valuation?.inputs?.current_pe_percentile;
-  const missingInputs = valuation?.missing_inputs ?? [];
+  const grossMargin = derivedValue(latest, "gross_margin");
+  const roe = derivedValue(latest, "roe");
 
   return [
-    {
-      label: "P/E Percentile",
-      value: formatPercentile(pePercentile),
-      detail:
-        pePercentile === null || pePercentile === undefined
-          ? missingDetail(missingInputs, "historical_pe_ratios")
-          : "Position versus historical P/E baseline",
-    },
-    {
-      label: "Owner Earnings",
-      value: formatCurrency(ownerEarnings),
-      detail:
-        ownerEarnings === null
-          ? "Waiting for net income, depreciation, and capex"
-          : "Net income plus D&A less maintenance capex proxy",
-    },
-    {
-      label: "Formula Score",
-      value: formatRatio(formulaScore),
-      detail:
-        formulaScore === null || formulaScore === undefined
-          ? missingDetail(missingInputs, "current_static_pe")
-          : "(10Y CAGR + dividend yield) / static P/E",
-    },
-  ];
+    revenue === null
+      ? null
+      : {
+          label: "Revenue",
+          value: formatCurrency(revenue),
+          detail: "Latest SEC filing revenue",
+        },
+    netIncome === null
+      ? null
+      : {
+          label: "Net Income",
+          value: formatCurrency(netIncome),
+          detail: "Latest SEC filing earnings",
+        },
+    freeCashFlow === null
+      ? null
+      : {
+          label: "Free Cash Flow",
+          value: formatCurrency(freeCashFlow),
+          detail: "Operating cash flow less capex",
+        },
+    ownerEarnings === null
+      ? null
+      : {
+          label: "Owner Earnings",
+          value: formatCurrency(ownerEarnings),
+          detail: "Net income plus D&A less maintenance capex proxy",
+        },
+    grossMargin === null
+      ? null
+      : {
+          label: "Gross Margin",
+          value: formatPercent(grossMargin),
+          detail: "Gross profit divided by revenue",
+        },
+    roe === null
+      ? null
+      : {
+          label: "ROE",
+          value: formatPercent(roe),
+          detail: "Net income divided by shareholders equity",
+        },
+  ].filter((metric): metric is ScorecardMetric => metric !== null);
+}
+
+export function buildFilingRows(financials: FinancialsResponse): FilingRow[] {
+  return financials.filings.slice(0, 20).map((filing) => ({
+    period: formatPeriodLabel(filing),
+    formType: filing.form_type,
+    filedAt: filing.filed_at,
+    revenue: formatCurrency(numberField(filing.base_metrics.revenue)),
+    netIncome: formatCurrency(numberField(filing.base_metrics.net_income)),
+    freeCashFlow: formatCurrency(derivedValue(filing, "free_cash_flow")),
+    ownerEarnings: formatCurrency(derivedValue(filing, "owner_earnings")),
+  }));
 }
 
 export function hasIncompleteHistory(points: TrendPoint[]): boolean {
@@ -132,23 +177,22 @@ function formatCurrency(value: number | null): string {
   return `$${value.toFixed(0)}`;
 }
 
-function formatPercentile(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
+function formatPercent(value: number | null): string {
+  if (value === null) {
     return "Pending";
   }
-  return `${value.toFixed(0)}%`;
+  return `${(value * 100).toFixed(1)}%`;
 }
 
-function formatRatio(value: number | null | undefined): string {
-  if (value === null || value === undefined) {
-    return "Pending";
+function formatPeriodLabel(filing: FilingSnapshot): string {
+  if (filing.form_type === "10-K") {
+    return `${filing.period_end_date.slice(0, 4)} FY`;
   }
-  return value.toFixed(2);
-}
 
-function missingDetail(missingInputs: string[], primaryInput: string): string {
-  if (missingInputs.includes(primaryInput)) {
-    return "Market data input required";
+  const month = Number(filing.period_end_date.slice(5, 7));
+  if (!Number.isFinite(month) || month < 1 || month > 12) {
+    return filing.period_end_date.slice(0, 4);
   }
-  return "Waiting for complete historical filings";
+  const quarter = Math.floor((month - 1) / 3) + 1;
+  return `${filing.period_end_date.slice(0, 4)} Q${quarter}`;
 }

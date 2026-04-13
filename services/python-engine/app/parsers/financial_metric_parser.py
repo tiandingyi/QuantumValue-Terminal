@@ -103,10 +103,11 @@ def parse_financial_metric(
     ticker: Optional[str] = None,
     cik: Optional[str] = None,
     required_fields: Optional[Iterable[str]] = None,
+    anchor: Optional[dict[str, Any]] = None,
 ) -> FinancialMetric:
     """Parse raw SEC company facts into a standardized Pydantic model."""
     store = CompanyFactsMetricStore(company_facts)
-    anchor = _resolve_anchor(store)
+    anchor = anchor or _resolve_anchor(store)
     required_field_names = set(required_fields) if required_fields is not None else set(DEFAULT_REQUIRED_METRIC_FIELDS)
     unknown_required_fields = required_field_names - set(METRIC_TAGS)
     if unknown_required_fields:
@@ -140,6 +141,25 @@ def parse_financial_metric(
         values["filed_at"] = max(filed_values) if filed_values else None
 
     return FinancialMetric.model_validate(values)
+
+
+def parse_financial_metric_for_period(
+    company_facts: dict[str, Any],
+    *,
+    period_end: str,
+    form_type: str,
+    ticker: Optional[str] = None,
+    cik: Optional[str] = None,
+    required_fields: Optional[Iterable[str]] = None,
+) -> FinancialMetric:
+    """Parse a FinancialMetric aligned to one filing period."""
+    return parse_financial_metric(
+        company_facts,
+        ticker=ticker,
+        cik=cik,
+        required_fields=required_fields,
+        anchor={"end": period_end, "form": form_type},
+    )
 
 
 def _period_context(anchor: Optional[dict[str, Any]]) -> Optional[dict[str, Any]]:

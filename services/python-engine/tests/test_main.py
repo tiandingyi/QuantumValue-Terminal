@@ -133,7 +133,8 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
     assert payload.details is not None
     assert payload.details["company_name"] == "NVIDIA CORP"
     assert payload.details["latest_assets"]["value"] == 111111
-    assert payload.details["persistence"]["filing_id"] == "filing-1"
+    assert payload.details["persistence"]["latest_filing"]["filing_id"] == "filing-1"
+    assert payload.details["persistence"]["filing_count"] == 1
     assert fake_store.persisted_derived_metrics is not None
     assert fake_store.persisted_derived_metrics["free_cash_flow"].value == 330
     assert fake_store.persisted_derived_metrics["owner_earnings"].value == 250

@@ -16,6 +16,7 @@ import { Line } from "react-chartjs-2";
 
 import {
   FinancialsResponse,
+  buildFilingRows,
   buildScorecard,
   buildTrendPoints,
   hasIncompleteHistory,
@@ -127,6 +128,7 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
 
   const trendPoints = useMemo(() => (financials ? buildTrendPoints(financials) : []), [financials]);
   const scorecard = useMemo(() => (financials ? buildScorecard(financials) : []), [financials]);
+  const filingRows = useMemo(() => (financials ? buildFilingRows(financials) : []), [financials]);
   const incompleteHistory = financials ? hasIncompleteHistory(trendPoints) : false;
 
   const revenueChartData = useMemo<ChartData<"line">>(
@@ -186,7 +188,7 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
               {financials ? `${financials.company} filings` : `${activeTicker} filings`}
             </h2>
             <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-400">
-              Revenue, earnings, cash generation, and valuation signals from the Go Gateway JSONB feed.
+              Revenue, earnings, cash generation, and balance sheet signals from the Go Gateway JSONB feed.
             </p>
           </div>
           <div className="border border-white/10 bg-black/25 px-4 py-3 text-sm text-slate-300">
@@ -211,7 +213,7 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
 
             {incompleteHistory ? (
               <div className="mt-5 border border-white/10 bg-white/[0.03] px-4 py-3 text-sm text-slate-300">
-                Fewer than ten annual periods are available. Long-range trend and valuation context will sharpen after more filings are synced.
+                {trendPoints.length} filing period{trendPoints.length === 1 ? "" : "s"} loaded. Sync stores the latest supported SEC filings first; long-range trend context sharpens as more periods are cached.
               </div>
             ) : null}
 
@@ -223,6 +225,33 @@ export function ArchaeologyDashboard({ activeTicker }: ArchaeologyDashboardProps
                   <p className="mt-2 text-sm leading-6 text-slate-500">{metric.detail}</p>
                 </div>
               ))}
+            </div>
+
+            <div className="mt-8 overflow-x-auto border border-white/10 bg-black/15">
+              <table className="min-w-full border-collapse text-left text-sm">
+                <thead className="border-b border-white/10 text-xs uppercase tracking-[0.22em] text-slate-500">
+                  <tr>
+                    <th className="px-4 py-3 font-medium">Period</th>
+                    <th className="px-4 py-3 font-medium">Filed</th>
+                    <th className="px-4 py-3 font-medium">Revenue</th>
+                    <th className="px-4 py-3 font-medium">Net Income</th>
+                    <th className="px-4 py-3 font-medium">FCF</th>
+                    <th className="px-4 py-3 font-medium">Owner Earnings</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filingRows.map((row) => (
+                    <tr key={`${row.period}-${row.filedAt}`} className="border-b border-white/5 last:border-0">
+                      <td className="px-4 py-3 font-mono text-cyan-glow">{row.period}</td>
+                      <td className="px-4 py-3 text-slate-400">{row.filedAt}</td>
+                      <td className="px-4 py-3 text-slate-200">{row.revenue}</td>
+                      <td className="px-4 py-3 text-slate-200">{row.netIncome}</td>
+                      <td className="px-4 py-3 text-slate-200">{row.freeCashFlow}</td>
+                      <td className="px-4 py-3 text-slate-200">{row.ownerEarnings}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </>
         ) : null}

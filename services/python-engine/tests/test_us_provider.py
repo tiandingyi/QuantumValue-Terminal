@@ -98,6 +98,42 @@ def test_extract_latest_metric_returns_latest_end_date() -> None:
     assert latest["unit"] == "USD"
 
 
+def test_parse_financial_metric_passes_period_anchor_and_required_fields() -> None:
+    provider = USProvider(session=FakeSession({}))
+    metric = provider.parse_financial_metric(
+        {
+            "facts": {
+                "us-gaap": {
+                    "Revenues": {
+                        "units": {
+                            "USD": [
+                                {"end": "2024-12-31", "filed": "2025-02-01", "form": "10-K", "val": 100},
+                                {"end": "2025-12-31", "filed": "2026-02-01", "form": "10-K", "val": 200},
+                            ]
+                        }
+                    },
+                    "NetIncomeLoss": {
+                        "units": {
+                            "USD": [
+                                {"end": "2024-12-31", "filed": "2025-02-01", "form": "10-K", "val": 20},
+                                {"end": "2025-12-31", "filed": "2026-02-01", "form": "10-K", "val": 30},
+                            ]
+                        }
+                    },
+                }
+            }
+        },
+        ticker="TEST",
+        cik="0000000001",
+        required_fields=["revenue", "net_income"],
+        anchor={"end": "2024-12-31", "form": "10-K"},
+    )
+
+    assert metric.period_end == "2024-12-31"
+    assert metric.revenue == 100
+    assert metric.net_income == 20
+
+
 def test_extract_requested_financials_derives_requested_metrics() -> None:
     provider = USProvider(session=FakeSession({}))
     metrics = provider.extract_requested_financials(

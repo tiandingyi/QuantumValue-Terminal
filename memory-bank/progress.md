@@ -111,3 +111,9 @@
   - Added a Valuation Scorecard for current P/E percentile, Owner Earnings, and the quantitative formula score.
   - Added loading, cache-mining, endpoint-error, no-chartable-data, and incomplete-history fallback states.
   - Added frontend helper tests for JSONB financial payload transformation and scorecard formatting.
+- Tightened Sprint 3 historical filing behavior after local Docker verification:
+  - Updated the Python sync pipeline to parse and persist up to 20 recent supported SEC 10-K/10-Q filing periods per ticker instead of only the latest filing.
+  - Kept Go Gateway reads on the existing sqlc JSONB pass-through path while allowing the frontend to receive multi-period filing snapshots.
+  - Reworked the frontend scorecard to prioritize SEC-derived historical fundamentals and avoid surfacing skipped valuation inputs as primary `Pending` cards.
+  - Added a historical filing table and fixed the Sync button cursor affordance.
+  - Verified local `COST` sync now stores 20 `financial_metrics` rows from 2021-05-09 through 2026-02-15.

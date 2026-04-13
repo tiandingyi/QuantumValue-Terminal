@@ -142,7 +142,7 @@ export function SearchBar({ activeTicker, onTickerSelected }: SearchBarProps) {
             <button
               type="submit"
               disabled={isSubmitting}
-              className="rounded-xl border border-cyan-glow/30 bg-cyan-glow/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.24em] text-cyan-glow transition hover:bg-cyan-glow/20 disabled:cursor-not-allowed disabled:opacity-60"
+              className="cursor-pointer rounded-xl border border-cyan-glow/30 bg-cyan-glow/10 px-4 py-2 text-xs font-medium uppercase tracking-[0.24em] text-cyan-glow transition hover:bg-cyan-glow/20 disabled:cursor-not-allowed disabled:opacity-60"
             >
               {isSubmitting ? "Mining" : "Sync"}
             </button>

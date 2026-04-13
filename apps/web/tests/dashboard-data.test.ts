@@ -4,6 +4,7 @@ import test from "node:test";
 import { metricCards, priceSeries } from "../lib/dashboard-data";
 import {
   FinancialsResponse,
+  buildFilingRows,
   buildScorecard,
   buildTrendPoints,
   hasIncompleteHistory,
@@ -31,10 +32,13 @@ test("financials helpers build chart points and scorecard values", () => {
         base_metrics: {
           revenue: 2000,
           net_income: 300,
+          gross_profit: 800,
         },
         derived_metrics: {
           free_cash_flow: { name: "Free Cash Flow", value: 250, unit: "USD", end: "2026-09-30", filed: null },
           owner_earnings: { name: "Owner Earnings", value: 220, unit: "USD", end: "2026-09-30", filed: null },
+          gross_margin: { name: "Gross Margin", value: 0.4, unit: "ratio", end: "2026-09-30", filed: null },
+          roe: { name: "Return on Equity", value: 0.2, unit: "ratio", end: "2026-09-30", filed: null },
           valuation: {
             status: "ready",
             inputs: { current_pe_percentile: 85 },
@@ -61,12 +65,18 @@ test("financials helpers build chart points and scorecard values", () => {
   };
 
   const points = buildTrendPoints(financials);
-  assert.deepEqual(points.map((point) => point.label), ["2025", "2026"]);
+  assert.deepEqual(points.map((point) => point.label), ["2025 FY", "2026 FY"]);
   assert.equal(points[1].freeCashFlow, 250);
   assert.equal(hasIncompleteHistory(points), true);
 
   const scorecard = buildScorecard(financials);
-  assert.equal(scorecard[0].value, "85%");
-  assert.equal(scorecard[1].value, "$220");
-  assert.equal(scorecard[2].value, "1.70");
+  assert.equal(scorecard[0].label, "Revenue");
+  assert.equal(scorecard[0].value, "$2000");
+  assert.equal(scorecard[2].label, "Free Cash Flow");
+  assert.equal(scorecard[2].value, "$250");
+  assert.equal(scorecard[4].value, "40.0%");
+
+  const rows = buildFilingRows(financials);
+  assert.equal(rows[0].period, "2026 FY");
+  assert.equal(rows[0].ownerEarnings, "$220");
 });
