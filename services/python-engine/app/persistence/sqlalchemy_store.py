@@ -72,6 +72,27 @@ class SQLAlchemyPersistenceStore(PersistenceStore):
             "accession_number": filing.accession_number,
         }
 
+    def list_base_metric_history(self, company: CompanyLookup) -> list[FinancialMetric]:
+        statement = (
+            select(self._financial_metrics.c.base_metrics)
+            .select_from(
+                self._companies.join(
+                    self._filings,
+                    self._filings.c.company_id == self._companies.c.id,
+                ).join(
+                    self._financial_metrics,
+                    self._financial_metrics.c.filing_id == self._filings.c.id,
+                )
+            )
+            .where(self._companies.c.ticker == company.ticker)
+            .order_by(self._filings.c.period_end_date.asc())
+        )
+
+        with self._engine.begin() as connection:
+            rows = connection.execute(statement).scalars().all()
+
+        return [FinancialMetric.model_validate(row) for row in rows if row]
+
     def _upsert_company(self, company: CompanyLookup) -> Any:
         statement = insert(self._companies).values(
             ticker=company.ticker,

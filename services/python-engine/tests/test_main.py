@@ -34,11 +34,13 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
     class FakeStore:
         def __init__(self) -> None:
             self.statuses = []
+            self.persisted_derived_metrics = None
 
         def upsert_sync_status(self, company, task_type: str, status: str, last_error=None) -> None:
             self.statuses.append((company.ticker, task_type, status, last_error))
 
         def persist_filing_bundle(self, company, filing, base_metrics, derived_metrics):
+            self.persisted_derived_metrics = derived_metrics
             return {
                 "company_id": "company-1",
                 "filing_id": "filing-1",
@@ -47,6 +49,11 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
                 "period_end_date": filing.period_end_date,
                 "accession_number": filing.accession_number,
             }
+
+        def list_base_metric_history(self, company):
+            return [
+                FinancialMetric(period_end="2016-01-25", revenue=100),
+            ]
 
     class FakeProvider:
         def resolve_ticker(self, ticker: str) -> CompanyLookup:
@@ -95,12 +102,25 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
             return FinancialMetric(
                 period_end="2026-01-25",
                 filed_at="2026-02-21",
+                revenue=2000,
+                gross_profit=800,
+                net_income=300,
+                operating_cash_flow=420,
+                capex=-90,
+                depreciation_and_amortization=40,
+                shareholders_equity=1500,
                 assets=111111,
-                source_tags={"assets": "Assets"},
+                source_tags={
+                    "assets": "Assets",
+                    "revenue": "Revenues",
+                    "gross_profit": "GrossProfit",
+                    "net_income": "NetIncomeLoss",
+                    "operating_cash_flow": "NetCashProvidedByUsedInOperatingActivities",
+                    "capex": "PaymentsToAcquirePropertyPlantAndEquipment",
+                    "depreciation_and_amortization": "DepreciationAndAmortization",
+                    "shareholders_equity": "StockholdersEquity",
+                },
             )
-
-        def extract_requested_financials(self, company_facts):
-            return {}
 
     fake_store = FakeStore()
     monkeypatch.setattr(main_module, "provider_factory", FakeProvider)
@@ -114,6 +134,15 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
     assert payload.details["company_name"] == "NVIDIA CORP"
     assert payload.details["latest_assets"]["value"] == 111111
     assert payload.details["persistence"]["filing_id"] == "filing-1"
+    assert fake_store.persisted_derived_metrics is not None
+    assert fake_store.persisted_derived_metrics["free_cash_flow"].value == 330
+    assert fake_store.persisted_derived_metrics["owner_earnings"].value == 250
+    assert fake_store.persisted_derived_metrics["roe"].value == 0.2
+    assert fake_store.persisted_derived_metrics["gross_margin"].value == 0.4
+    assert round(fake_store.persisted_derived_metrics["revenue_10y_cagr"].value, 3) == round(
+        (2000 / 100) ** (1 / 10) - 1,
+        3,
+    )
     assert fake_store.statuses == [
         ("NVDA", "SEC_SYNC", "PENDING", None),
         ("NVDA", "SEC_SYNC", "IN_PROGRESS", None),
@@ -137,6 +166,9 @@ def test_finish_sync_marks_failed_when_provider_errors(monkeypatch) -> None:
 
         def persist_filing_bundle(self, company, filing, base_metrics, derived_metrics):
             raise AssertionError("persist_filing_bundle should not be called on failed sync")
+
+        def list_base_metric_history(self, company):
+            raise AssertionError("list_base_metric_history should not be called on failed scrape")
 
     class FailingProvider:
         def resolve_ticker(self, ticker: str) -> CompanyLookup:
@@ -182,6 +214,9 @@ def test_finish_sync_marks_store_failure_with_traceback(monkeypatch) -> None:
         def persist_filing_bundle(self, company, filing, base_metrics, derived_metrics):
             raise RuntimeError("database write exploded")
 
+        def list_base_metric_history(self, company):
+            return []
+
     class FakeProvider:
         def resolve_ticker(self, ticker: str) -> CompanyLookup:
             return CompanyLookup(ticker="MSFT", cik="0000789019", name="MICROSOFT CORP")
@@ -218,9 +253,6 @@ def test_finish_sync_marks_store_failure_with_traceback(monkeypatch) -> None:
                 revenue=1,
                 source_tags={"revenue": "Revenues"},
             )
-
-        def extract_requested_financials(self, company_facts):
-            return {}
 
     fake_store = FakeStore()
     monkeypatch.setattr(main_module, "provider_factory", FakeProvider)
@@ -259,6 +291,9 @@ def test_finish_sync_blocks_persistence_when_required_mapping_fails(monkeypatch)
             self.persist_called = True
             raise AssertionError("persist_filing_bundle should not be called when parsing fails")
 
+        def list_base_metric_history(self, company):
+            raise AssertionError("list_base_metric_history should not be called when parsing fails")
+
     class FakeProvider:
         def resolve_ticker(self, ticker: str) -> CompanyLookup:
             return CompanyLookup(ticker="GAP", cik="0000000002", name="GAP CORP")
@@ -296,9 +331,6 @@ def test_finish_sync_blocks_persistence_when_required_mapping_fails(monkeypatch)
                 cik=kwargs.get("cik"),
                 period_context={"end": "2025-12-31", "form": "10-K"},
             )
-
-        def extract_requested_financials(self, company_facts):
-            raise AssertionError("derived metrics should not be computed when base parsing fails")
 
     fake_store = FakeStore()
     monkeypatch.setattr(main_module, "provider_factory", FakeProvider)

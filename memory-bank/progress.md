@@ -94,3 +94,8 @@
   - Added `GET /api/v1/financials/:ticker` with case-insensitive ticker lookup, JSONB base/derived metric pass-through, and cache-miss triggering of the Python sync path.
   - Updated `GET /api/v1/status/:ticker` to prefer database-backed `SEC_SYNC` rows while preserving the Python proxy fallback for handshake compatibility.
   - Added Go regression tests for cached JSONB responses, invalid tickers, cache-miss sync triggering, database read failures, and database-backed in-progress status polling.
+- Completed Sprint 3 User Story 2 derived value metrics engine:
+  - Added a Python calculation layer that derives Free Cash Flow, Owner Earnings, ROE, Gross Margin, and revenue 10-year CAGR from normalized `FinancialMetric` base facts.
+  - Updated the FastAPI sync pipeline so derived metrics are calculated immediately after base parsing, with existing historical `base_metrics` loaded from JSONB when available for CAGR, then persisted separately into `derived_metrics`.
+  - Preserved base SEC DNA isolation by keeping `base_metrics` untouched and skipping only dependent derived calculations when inputs are missing.
+  - Added unit tests for derived formulas, missing-input skip behavior, zero-denominator ratio safety, 10-year CAGR history requirements, and sync persistence handoff.

@@ -27,3 +27,6 @@ class PersistenceStore(Protocol):
         derived_metrics: dict[str, DerivedMetric],
     ) -> dict[str, Any]:
         ...
+
+    def list_base_metric_history(self, company: CompanyLookup) -> list[FinancialMetric]:
+        ...
