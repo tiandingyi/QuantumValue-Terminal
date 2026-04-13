@@ -141,6 +141,53 @@ def test_parse_financial_metric_raises_for_missing_required_metric(caplog) -> No
     assert "missing metric 'net_income'" in caplog.text.lower()
 
 
+def test_parse_financial_metric_does_not_fallback_when_explicit_anchor_is_missing() -> None:
+    try:
+        parse_financial_metric(
+            {
+                "facts": {
+                    "us-gaap": {
+                        "Revenues": {
+                            "units": {
+                                "USD": [
+                                    {
+                                        "end": "2025-12-31",
+                                        "filed": "2026-02-01",
+                                        "form": "10-K",
+                                        "fp": "FY",
+                                        "val": 1000,
+                                    }
+                                ]
+                            }
+                        },
+                        "NetIncomeLoss": {
+                            "units": {
+                                "USD": [
+                                    {
+                                        "end": "2025-12-31",
+                                        "filed": "2026-02-01",
+                                        "form": "10-K",
+                                        "fp": "FY",
+                                        "val": 100,
+                                    }
+                                ]
+                            }
+                        },
+                    }
+                }
+            },
+            ticker="OLD",
+            cik="0000000004",
+            required_fields=["revenue", "net_income"],
+            anchor={"end": "1999-12-31", "form": "10-K"},
+        )
+    except FinancialMetricMappingError as exc:
+        assert exc.field_name == "revenue"
+        assert exc.period_context == {"end": "1999-12-31", "form": "10-K"}
+    else:
+        raise AssertionError("Expected explicit missing anchor period to raise instead of using latest facts")
+
+
 def test_parse_financial_metric_handles_missing_optional_metrics_with_warning(caplog) -> None:
     caplog.set_level(logging.WARNING)
 

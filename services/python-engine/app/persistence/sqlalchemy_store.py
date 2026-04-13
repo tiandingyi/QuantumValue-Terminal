@@ -4,7 +4,7 @@ from dataclasses import asdict, is_dataclass
 from datetime import datetime
 from typing import Any, Optional
 
-from sqlalchemy import MetaData, Table, create_engine, func, select
+from sqlalchemy import MetaData, Table, create_engine, delete, func, select
 from sqlalchemy.dialects.postgresql import insert
 
 from app.models.financial_metric import FinancialMetric
@@ -92,6 +92,40 @@ class SQLAlchemyPersistenceStore(PersistenceStore):
             rows = connection.execute(statement).scalars().all()
 
         return [FinancialMetric.model_validate(row) for row in rows if row]
+
+    def prune_company_filings(
+        self,
+        company: CompanyLookup,
+        keep_filing_keys: set[tuple[str, str]],
+    ) -> int:
+        """Remove stale supported filing metrics that are not parseable in this full-history sync."""
+        company_id = self._upsert_company(company)
+        statement = (
+            select(
+                self._filings.c.id,
+                self._filings.c.form_type,
+                self._filings.c.period_end_date,
+            )
+            .where(self._filings.c.company_id == company_id)
+            .where(self._filings.c.form_type.in_(["10-K", "10-Q"]))
+        )
+
+        with self._engine.begin() as connection:
+            rows = connection.execute(statement).all()
+            stale_filing_ids = [
+                row.id
+                for row in rows
+                if (row.form_type, row.period_end_date.isoformat()) not in keep_filing_keys
+            ]
+            if not stale_filing_ids:
+                return 0
+
+            connection.execute(
+                delete(self._financial_metrics).where(self._financial_metrics.c.filing_id.in_(stale_filing_ids))
+            )
+            connection.execute(delete(self._filings).where(self._filings.c.id.in_(stale_filing_ids)))
+
+        return len(stale_filing_ids)
 
     def _upsert_company(self, company: CompanyLookup) -> Any:
         statement = insert(self._companies).values(

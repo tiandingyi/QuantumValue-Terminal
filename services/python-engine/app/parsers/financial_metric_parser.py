@@ -192,7 +192,7 @@ def _safe_lookup(
 ) -> Optional[Tuple[str, dict[str, Any]]]:
     try:
         if anchor is not None:
-            return store.metric_for_anchor_period(metric_tags, anchor=anchor)
+            return store.metric_for_anchor_period(metric_tags, anchor=anchor, allow_fallback=False)
         return store.latest_metric_from_candidates(metric_tags)
     except ValueError:
         logger.warning("FinancialMetric parser missing metric '%s'; defaulting to None.", field_name)

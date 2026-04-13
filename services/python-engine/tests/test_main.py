@@ -160,6 +160,117 @@ def test_finish_sync_populates_success_details(monkeypatch) -> None:
     ]
 
 
+def test_finish_sync_fetches_archived_submission_history_and_skips_unparseable_period(monkeypatch) -> None:
+    class FakeStore:
+        def __init__(self) -> None:
+            self.persisted_periods = []
+            self.keep_filing_keys = None
+
+        def upsert_sync_status(self, company, task_type: str, status: str, last_error=None) -> None:
+            return None
+
+        def persist_filing_bundle(self, company, filing, base_metrics, derived_metrics):
+            self.persisted_periods.append(filing.period_end_date)
+            return {
+                "company_id": "company-1",
+                "filing_id": f"filing-{filing.period_end_date}",
+                "financial_metrics_id": f"metrics-{filing.period_end_date}",
+                "form_type": filing.form_type,
+                "period_end_date": filing.period_end_date,
+                "accession_number": filing.accession_number,
+            }
+
+        def list_base_metric_history(self, company):
+            return []
+
+        def prune_company_filings(self, company, keep_filing_keys):
+            self.keep_filing_keys = keep_filing_keys
+            return 2
+
+    class FakeProvider:
+        def resolve_ticker(self, ticker: str) -> CompanyLookup:
+            return CompanyLookup(ticker="HIST", cik="0000000003", name="HISTORY CORP")
+
+        def get_submissions(self, cik: str):
+            return {
+                "filings": {
+                    "recent": {
+                        "form": ["10-K", "10-Q"],
+                        "accessionNumber": ["recent-k", "recent-q"],
+                        "filingDate": ["2026-02-20", "2025-11-20"],
+                        "reportDate": ["2025-12-31", "2025-09-30"],
+                    },
+                    "files": [{"name": "CIK0000000003-submissions-001.json"}],
+                },
+            }
+
+        def get_submission_file(self, file_name: str):
+            assert file_name == "CIK0000000003-submissions-001.json"
+            return {
+                "form": ["10-K", "8-K", "10-K"],
+                "accessionNumber": ["old-k", "old-8k", "too-old-k"],
+                "filingDate": ["2018-02-20", "2017-11-20", "2008-02-20"],
+                "reportDate": ["2017-12-31", "2017-09-30", "2007-12-31"],
+            }
+
+        def get_company_facts(self, cik: str):
+            return {}
+
+        def extract_latest_metric(self, company_facts, metric_name: str):
+            return {
+                "val": 123,
+                "unit": "USD",
+                "end": "2025-12-31",
+                "filed": "2026-02-20",
+                "form": "10-K",
+            }
+
+        def parse_financial_metric(self, company_facts, **kwargs) -> FinancialMetric:
+            anchor = kwargs["anchor"]
+            if anchor["end"] == "2007-12-31":
+                raise FinancialMetricMappingError(
+                    field_name="revenue",
+                    candidate_tags=["Revenues"],
+                    ticker=kwargs.get("ticker"),
+                    cik=kwargs.get("cik"),
+                    period_context=anchor,
+                )
+            return FinancialMetric(
+                period_end=anchor["end"],
+                filed_at="2026-02-20",
+                revenue=1000,
+                net_income=100,
+                operating_cash_flow=120,
+                capex=-20,
+                source_tags={"revenue": "Revenues", "net_income": "NetIncomeLoss"},
+            )
+
+    fake_store = FakeStore()
+    monkeypatch.setattr(main_module, "provider_factory", FakeProvider)
+    monkeypatch.setattr(main_module, "persistence_store_factory", lambda: fake_store)
+    asyncio.run(main_module.finish_sync("HIST"))
+
+    payload = main_module.sync_state.get("HIST")
+    assert payload is not None
+    assert payload.status == "SUCCESS"
+    assert payload.details is not None
+    assert payload.details["archive_file_count"] == 1
+    assert payload.details["discovered_filing_count"] == 4
+    assert payload.details["parsed_filing_count"] == 3
+    assert payload.details["skipped_filing_count"] == 1
+    assert payload.details["earliest_period_end"] == "2017-12-31"
+    assert payload.details["latest_period_end"] == "2025-12-31"
+    assert payload.details["persistence"]["filing_count"] == 3
+    assert payload.details["persistence"]["pruned_filing_count"] == 2
+    assert payload.details["persistence"]["earliest_period_end"] == "2017-12-31"
+    assert fake_store.persisted_periods == ["2017-12-31", "2025-09-30", "2025-12-31"]
+    assert fake_store.keep_filing_keys == {
+        ("10-K", "2017-12-31"),
+        ("10-Q", "2025-09-30"),
+        ("10-K", "2025-12-31"),
+    }
+
+
 def test_finish_sync_marks_failed_when_provider_errors(monkeypatch) -> None:
     class FakeStore:
         def __init__(self) -> None:

@@ -131,3 +131,10 @@
   - Intermediate quarterly rows are filtered out of the chart, scorecard, and filing table so the long-term view stays annual-first.
   - Money values now use compact USD formatting such as `US$136.9B` and chart axis labels use abbreviated dollar units.
   - Browser E2E now asserts the annual-first policy and compact money display against the live COST page.
+- Completed Sprint 3 User Story 6 full SEC historical filing ingestion:
+  - Added the story card requiring company syncs to fetch the main SEC submissions payload plus every archive listed under `filings.files`, with no fixed year or 20-filing cap.
+  - Extended the Python SEC provider to fetch archived submissions files and merged main/archive 10-K and 10-Q metadata with accession-based deduplication.
+  - Tightened explicit period parsing so historical filings without same-period required companyfacts are skipped with diagnostics instead of silently reusing newer facts.
+  - Added stale-history pruning so a full sync removes old parse-invalid 10-K/10-Q rows for the company before the frontend reads through the Go sqlc JSONB endpoint.
+  - Verified local COST sync through Docker discovered 125 supported SEC filings, parsed and persisted 71 companyfacts-backed filings from 2008-08-31 through 2026-02-15, and pruned 54 unparseable older rows.
+  - Re-ran the browser E2E COST dashboard flow successfully after the expanded history sync.

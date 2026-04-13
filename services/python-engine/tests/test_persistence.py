@@ -1,5 +1,5 @@
 from app.models.financial_metric import FinancialMetric
-from app.persistence.filing_metadata import extract_latest_supported_filing
+from app.persistence.filing_metadata import extract_all_supported_filings, extract_latest_supported_filing
 from app.providers.sec_types import DerivedMetric
 
 
@@ -21,6 +21,64 @@ def test_extract_latest_supported_filing_picks_latest_supported_form() -> None:
     assert filing.form_type == "10-Q"
     assert filing.accession_number == "b"
     assert filing.period_end_date == "2025-12-31"
+
+
+def test_extract_all_supported_filings_merges_recent_and_archives_without_limit() -> None:
+    filings = extract_all_supported_filings(
+        {
+            "filings": {
+                "recent": {
+                    "form": ["10-K", "8-K", "10-Q"],
+                    "accessionNumber": ["recent-k", "recent-8k", "recent-q"],
+                    "filingDate": ["2026-03-01", "2026-02-01", "2025-12-01"],
+                    "reportDate": ["2026-01-31", "2026-01-15", "2025-10-31"],
+                }
+            }
+        },
+        [
+            {
+                "form": ["10-K", "10-Q", "8-K"],
+                "accessionNumber": ["archive-k-1", "archive-q-1", "archive-8k"],
+                "filingDate": ["2012-03-01", "2011-12-01", "2011-11-01"],
+                "reportDate": ["2012-01-31", "2011-10-31", "2011-10-15"],
+            }
+        ],
+        "0001045810",
+    )
+
+    assert [filing.accession_number for filing in filings] == [
+        "recent-k",
+        "recent-q",
+        "archive-k-1",
+        "archive-q-1",
+    ]
+
+
+def test_extract_all_supported_filings_dedupes_duplicate_accessions() -> None:
+    filings = extract_all_supported_filings(
+        {
+            "filings": {
+                "recent": {
+                    "form": ["10-K"],
+                    "accessionNumber": ["same-accession"],
+                    "filingDate": ["2026-03-01"],
+                    "reportDate": ["2026-01-31"],
+                }
+            }
+        },
+        [
+            {
+                "form": ["10-K"],
+                "accessionNumber": ["same-accession"],
+                "filingDate": ["2026-03-01"],
+                "reportDate": ["2026-01-31"],
+            }
+        ],
+        "0001045810",
+    )
+
+    assert len(filings) == 1
+    assert filings[0].accession_number == "same-accession"
 
 
 def test_financial_metric_dump_is_ready_for_jsonb_storage() -> None:

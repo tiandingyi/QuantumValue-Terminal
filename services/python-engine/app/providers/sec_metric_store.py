@@ -117,6 +117,7 @@ class CompanyFactsMetricStore:
         metric_names: list[str],
         anchor: dict[str, Any],
         taxonomy: str = "us-gaap",
+        allow_fallback: bool = True,
     ) -> tuple[str, dict[str, Any]]:
         """Pick the fact that best matches the anchor filing period for a metric family.
 
@@ -171,6 +172,9 @@ class CompanyFactsMetricStore:
                 )
                 return metric_name, same_end_matches[0]
 
+            if not allow_fallback:
+                continue
+
             ranked_candidates = sorted(
                 candidates,
                 key=lambda item: (
@@ -189,7 +193,7 @@ class CompanyFactsMetricStore:
             if best_fallback is None or ranked_candidates[0] != best_fallback[1]:
                 best_fallback = candidate
 
-        if best_fallback is not None:
+        if allow_fallback and best_fallback is not None:
             return best_fallback
 
         raise ValueError(

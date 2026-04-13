@@ -2,9 +2,8 @@ import asyncio
 import logging
 import os
 import traceback
-from typing import Any
 from datetime import datetime, timezone
-from typing import Optional
+from typing import Any, Optional
 
 import requests
 from fastapi import FastAPI, HTTPException, status
@@ -12,8 +11,9 @@ from pydantic import BaseModel
 
 from app.calculations.derived_metrics import calculate_derived_metrics
 from app.calculations.valuation import calculate_valuation_section
+from app.parsers.financial_metric_parser import FinancialMetricMappingError
 from app.persistence.factory import build_persistence_store
-from app.persistence.filing_metadata import extract_supported_filings
+from app.persistence.filing_metadata import extract_all_supported_filings
 from app.providers.sec_types import CompanyDataBundle
 from app.providers.us_provider import USProvider
 
@@ -23,8 +23,8 @@ SYNC_TASK_TYPE = "SEC_SYNC"
 SCRAPE_TASK_TYPE = "SCRAPE"
 PARSE_TASK_TYPE = "PARSE"
 STORE_TASK_TYPE = "STORE"
-HISTORICAL_FILING_LIMIT = 20
 HISTORICAL_REQUIRED_FIELDS = ["revenue", "net_income"]
+PARSE_ERROR_SAMPLE_LIMIT = 10
 
 
 class SyncResponse(BaseModel):
@@ -83,6 +83,14 @@ async def finish_sync(ticker: str) -> None:
 
         current_stage = SCRAPE_TASK_TYPE
         submissions = await asyncio.to_thread(provider.get_submissions, company.cik)
+        archived_submissions = []
+        archive_errors = []
+        for archive_name in _submission_archive_names(submissions):
+            try:
+                archived_submissions.append(await asyncio.to_thread(provider.get_submission_file, archive_name))
+            except (requests.RequestException, ValueError) as exc:
+                logger.warning("Failed to fetch SEC submissions archive %s for %s: %s", archive_name, ticker, exc)
+                archive_errors.append({"file": archive_name, "error": str(exc)})
         company_facts = await asyncio.to_thread(provider.get_company_facts, company.cik)
         bundle = CompanyDataBundle(company=company, submissions=submissions, company_facts=company_facts)
         if store is not None:
@@ -91,24 +99,63 @@ async def finish_sync(ticker: str) -> None:
 
         current_stage = PARSE_TASK_TYPE
         latest_assets = provider.extract_latest_metric(bundle.company_facts, "Assets")
-        filing_metadatas = extract_supported_filings(
+        filing_metadatas = extract_all_supported_filings(
             bundle.submissions,
+            archived_submissions,
             bundle.company.cik,
-            limit=HISTORICAL_FILING_LIMIT,
         )
         if not filing_metadatas:
             raise ValueError("No supported 10-K or 10-Q filing metadata was found in SEC submissions.")
 
         parsed_base_bundles = []
+        parse_errors = []
+        parse_exceptions = []
         for filing_metadata in sorted(filing_metadatas, key=lambda item: item.period_end_date):
-            base_metrics = provider.parse_financial_metric(
-                bundle.company_facts,
-                ticker=bundle.company.ticker,
-                cik=bundle.company.cik,
-                required_fields=HISTORICAL_REQUIRED_FIELDS,
-                anchor={"end": filing_metadata.period_end_date, "form": filing_metadata.form_type},
-            )
+            try:
+                base_metrics = provider.parse_financial_metric(
+                    bundle.company_facts,
+                    ticker=bundle.company.ticker,
+                    cik=bundle.company.cik,
+                    required_fields=HISTORICAL_REQUIRED_FIELDS,
+                    anchor={"end": filing_metadata.period_end_date, "form": filing_metadata.form_type},
+                )
+            except (FinancialMetricMappingError, ValueError) as exc:
+                parse_exceptions.append(exc)
+                logger.warning(
+                    "Skipping unparseable SEC filing %s %s %s for %s: %s",
+                    filing_metadata.form_type,
+                    filing_metadata.period_end_date,
+                    filing_metadata.accession_number,
+                    ticker,
+                    exc,
+                )
+                parse_errors.append(
+                    {
+                        "form_type": filing_metadata.form_type,
+                        "period_end_date": filing_metadata.period_end_date,
+                        "accession_number": filing_metadata.accession_number,
+                        "error": str(exc),
+                    }
+                )
+                continue
             parsed_base_bundles.append((filing_metadata, base_metrics))
+
+        if not parsed_base_bundles:
+            if parse_exceptions:
+                raise parse_exceptions[0]
+            raise ValueError("No parseable supported 10-K or 10-Q filing metrics were found in SEC companyfacts.")
+
+        pruned_filing_count = 0
+        if store is not None and hasattr(store, "prune_company_filings"):
+            keep_filing_keys = {
+                (filing_metadata.form_type, filing_metadata.period_end_date)
+                for filing_metadata, _ in parsed_base_bundles
+            }
+            pruned_filing_count = await asyncio.to_thread(
+                store.prune_company_filings,
+                bundle.company,
+                keep_filing_keys,
+            )
 
         historical_metrics_by_period: dict[str, Any] = {}
         if store is not None:
@@ -155,6 +202,8 @@ async def finish_sync(ticker: str) -> None:
             persistence_details = {
                 "status": "stored",
                 "filing_count": len(persisted_filings),
+                "pruned_filing_count": pruned_filing_count,
+                "earliest_period_end": min(details["period_end_date"] for details in persisted_filings),
                 "latest_filing": next(
                     (
                         details
@@ -175,8 +224,15 @@ async def finish_sync(ticker: str) -> None:
                 "company_name": bundle.company.name,
                 "cik": bundle.company.cik,
                 "persistence": persistence_details or {"status": "skipped"},
+                "archive_file_count": len(archived_submissions),
+                "archive_error_count": len(archive_errors),
+                "archive_errors": archive_errors[:PARSE_ERROR_SAMPLE_LIMIT],
+                "discovered_filing_count": len(filing_metadatas),
                 "parsed_filing_count": len(parsed_filing_bundles),
-                "latest_period_end": latest_base_metrics.period_end,
+                "skipped_filing_count": len(parse_errors),
+                "parse_errors": parse_errors[:PARSE_ERROR_SAMPLE_LIMIT],
+                "earliest_period_end": min(item[0].period_end_date for item in parsed_filing_bundles),
+                "latest_period_end": latest_filing_metadata.period_end_date,
                 "latest_assets": {
                     "value": latest_assets["val"],
                     "unit": latest_assets["unit"],
@@ -203,6 +259,18 @@ async def finish_sync(ticker: str) -> None:
             "FAILED",
             f"SEC EDGAR fetch failed for {ticker}: {exc}",
         )
+
+
+def _submission_archive_names(submissions: dict[str, Any]) -> list[str]:
+    files = submissions.get("filings", {}).get("files", [])
+    archive_names = []
+    for file_info in files:
+        if not isinstance(file_info, dict):
+            continue
+        archive_name = file_info.get("name")
+        if archive_name:
+            archive_names.append(archive_name)
+    return archive_names
 
 
 @app.get("/healthz")

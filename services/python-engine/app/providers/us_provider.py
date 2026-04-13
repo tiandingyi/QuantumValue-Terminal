@@ -115,6 +115,21 @@ class USProvider:
         """
         return self._get_json(f"{SEC_BASE_URL}/submissions/CIK{pad_cik(cik)}.json")
 
+    def get_submission_file(self, file_name: str) -> dict:
+        """Fetch one archived SEC submissions file listed by the main submissions payload.
+
+        Args:
+            file_name: SEC archive file name such as
+                ``CIK0001045810-submissions-001.json``.
+
+        Returns:
+            dict: Decoded JSON payload from ``/submissions/{file_name}``.
+        """
+        normalized_file_name = file_name.strip()
+        if not normalized_file_name:
+            raise ValueError("SEC submissions archive file name is required.")
+        return self._get_json(f"{SEC_BASE_URL}/submissions/{normalized_file_name}")
+
     def get_company_facts(self, cik: str) -> dict:
         """Fetch the raw SEC XBRL company facts document for a single issuer.
 

@@ -30,3 +30,10 @@ class PersistenceStore(Protocol):
 
     def list_base_metric_history(self, company: CompanyLookup) -> list[FinancialMetric]:
         ...
+
+    def prune_company_filings(
+        self,
+        company: CompanyLookup,
+        keep_filing_keys: set[tuple[str, str]],
+    ) -> int:
+        ...

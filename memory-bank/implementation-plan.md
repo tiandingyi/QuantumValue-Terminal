@@ -355,3 +355,24 @@ User Story 6: CI-Driven Supabase Initialization
 - The E2E evidence must include either a Playwright trace/screenshot artifact under `output/playwright/` or a terminal-recorded browser snapshot plus the exact command used to reproduce the flow.
 - If Playwright CLI or browser automation tooling is unavailable, the card cannot be marked complete until the blocker is documented and resolved; API-only verification is insufficient for frontend-facing cards.
 - CI should eventually run a deterministic E2E variant against seeded or mocked local data, but local human-equivalent browser operation remains required before closing the story.
+
+**User Story 6: Full SEC Historical Filing Ingestion**
+
+**Role:** Data Engineer
+**Requirement:** I want a company sync to ingest every SEC-available supported historical filing for that issuer instead of stopping at a fixed year count or recent-filing cap.
+**Reason:** So that the terminal can behave like true financial archaeology: the frontend receives the complete parseable 10-K history, plus the newest 10-Q when no annual report exists for the latest year.
+
+**Scope & Boundaries:**
+
+- **In-Scope:** SEC submissions archive file discovery, historical 10-K/10-Q metadata extraction, duplicate accession handling, per-filing parse tolerance for older incomplete company-facts periods, JSONB persistence through the existing Python SQLAlchemy ingestion path, and Go sqlc read compatibility.
+- **Out-of-Scope:** Hand-parsing legacy HTML filings that are absent from SEC companyfacts JSON, market-data enrichment, or changing the frontend annual-first display policy.
+
+**Acceptance Criteria:**
+
+- The engine fetches the main SEC submissions payload plus every archive payload listed under `filings.files`.
+- Sync no longer uses a fixed 10-year or 20-filing ingestion cap.
+- Only `10-K` and `10-Q` filings are selected for financial metric parsing and persistence.
+- Duplicate filing metadata is removed by accession number, with a CIK/form/period fallback key.
+- Individual older periods that cannot map required facts are skipped with diagnostics while all other parseable periods still persist.
+- Sync status details report discovered, parsed, skipped, persisted, earliest-period, and latest-period values.
+- The frontend contract remains unchanged: Go Gateway still serves expanded historical records through the existing sqlc-backed JSONB financials endpoint.

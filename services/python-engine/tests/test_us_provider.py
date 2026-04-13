@@ -73,6 +73,22 @@ def test_fetch_company_data_uses_ticker_mapping_and_sec_headers() -> None:
         assert call["headers"]["Accept-Encoding"] == "gzip, deflate"
 
 
+def test_get_submission_file_fetches_sec_archive_payload() -> None:
+    session = FakeSession(
+        {
+            "https://data.sec.gov/submissions/CIK0001045810-submissions-001.json": FakeResponse(
+                {"accessionNumber": ["old-filing"]}
+            ),
+        }
+    )
+    provider = USProvider(session=session)
+
+    payload = provider.get_submission_file("CIK0001045810-submissions-001.json")
+
+    assert payload["accessionNumber"] == ["old-filing"]
+    assert session.calls[0]["url"] == "https://data.sec.gov/submissions/CIK0001045810-submissions-001.json"
+
+
 def test_extract_latest_metric_returns_latest_end_date() -> None:
     provider = USProvider(session=FakeSession({}))
     latest = provider.extract_latest_metric(
