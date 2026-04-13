@@ -1,3 +1,4 @@
+import { StackStatus } from "@/components/dashboard/stack-status";
 import { TerminalWorkspace } from "@/components/dashboard/terminal-workspace";
 import { Sidebar } from "@/components/layout/sidebar";
 
@@ -8,7 +9,12 @@ export default function Home() {
       <div className="absolute inset-x-0 top-0 h-64 bg-[radial-gradient(circle_at_top,rgba(95,242,255,0.16),transparent_60%)]" />
       <div className="relative z-10 md:flex">
         <Sidebar />
-        <TerminalWorkspace />
+        <div className="flex-1">
+          <TerminalWorkspace />
+          <div className="space-y-8 md:space-y-10">
+            <StackStatus />
+          </div>
+        </div>
       </div>
     </main>
   );
