@@ -105,3 +105,9 @@
   - Appended a dedicated `valuation` section inside `derived_metrics`, including skipped/missing-input diagnostics when valuation inputs are unavailable.
   - Updated persistence serialization so mixed derived metric dataclasses and nested valuation dictionaries are JSONB-ready.
   - Added unit tests for valuation formula scoring, P/E percentile flagging, formula threshold flagging, missing-input diagnostics, and sync persistence handoff.
+- Completed Sprint 3 User Story 4 frontend archaeology visualization:
+  - Added a Next.js dashboard module that consumes the Go Gateway `GET /api/v1/financials/:ticker` JSONB endpoint.
+  - Rendered Revenue vs. Net Income and Free Cash Flow Chart.js time-series views from filing snapshots.
+  - Added a Valuation Scorecard for current P/E percentile, Owner Earnings, and the quantitative formula score.
+  - Added loading, cache-mining, endpoint-error, no-chartable-data, and incomplete-history fallback states.
+  - Added frontend helper tests for JSONB financial payload transformation and scorecard formatting.

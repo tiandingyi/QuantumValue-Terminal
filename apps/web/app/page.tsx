@@ -1,6 +1,5 @@
+import { ArchaeologyDashboard } from "@/components/dashboard/archaeology-dashboard";
 import { FinancialMatrix } from "@/components/dashboard/financial-matrix";
-import { HeroChart } from "@/components/dashboard/hero-chart";
-import { MetricStrip } from "@/components/dashboard/metric-strip";
 import { StackStatus } from "@/components/dashboard/stack-status";
 import { Sidebar } from "@/components/layout/sidebar";
 import { SearchBar } from "@/components/search/search-bar";
@@ -15,8 +14,7 @@ export default function Home() {
         <div className="flex-1">
           <SearchBar />
           <div className="space-y-8 md:space-y-10">
-            <HeroChart />
-            <MetricStrip />
+            <ArchaeologyDashboard />
             <StackStatus />
             <FinancialMatrix />
           </div>

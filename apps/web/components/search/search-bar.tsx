@@ -143,7 +143,7 @@ export function SearchBar() {
             </div>
             <p className="text-sm text-slate-400">
               {syncStatus?.message ??
-                "Enter a ticker and press Sync to trigger the mock end-to-end handshake through Go and Python."}
+                "Enter a ticker and press Sync to refresh the SEC filing cache through Go and Python."}
             </p>
           </div>
 

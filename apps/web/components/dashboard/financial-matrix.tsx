@@ -10,7 +10,7 @@ export function FinancialMatrix() {
             <h2 className="mt-2 text-2xl font-semibold text-white">Master financial matrix</h2>
           </div>
           <p className="max-w-xl text-sm text-slate-400">
-            The first migration keeps the original template’s wide-format table, but moves it into typed React markup that can later hydrate from JSONB payloads.
+            A compact filing table remains available while the trend dashboard loads the live JSONB financial feed.
           </p>
         </div>
         <div className="overflow-x-auto">
