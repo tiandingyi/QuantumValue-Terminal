@@ -376,3 +376,431 @@ User Story 6: CI-Driven Supabase Initialization
 - Individual older periods that cannot map required facts are skipped with diagnostics while all other parseable periods still persist.
 - Sync status details report discovered, parsed, skipped, persisted, earliest-period, and latest-period values.
 - The frontend contract remains unchanged: Go Gateway still serves expanded historical records through the existing sqlc-backed JSONB financials endpoint.
+
+**User Story 7: Yearly Derived Metrics Table**
+
+**Role:** Fundamental Analyst / Frontend User
+**Requirement:** I want the system to calculate the target derived financial indicators for each available reporting year and display those yearly values in the frontend financial table.
+**Reason:** So that the terminal can move beyond raw SEC facts and show a reusable, year-by-year analytical view of valuation, business quality, shareholder returns, financial risk, and pricing power.
+
+**Scope & Boundaries:**
+
+- **In-Scope:** Backend formula implementation, per-year derived metric calculation from existing `base_metrics`, persistence into `derived_metrics` JSONB, Go sqlc pass-through compatibility, frontend table columns, clear missing-input states, and browser E2E verification.
+- **Out-of-Scope:** Hand-entered analyst overrides, non-SEC market-data provider integration unless a required metric explicitly has current price/market-cap inputs available, AI-based interpretation of missing fields, and changing the raw SEC base fact storage model.
+- **Field mapping note:** Formulas below name concepts in English aligned with `base_metrics` / SEC mappings. The Python engine must map from SEC XBRL and canonical `base_metrics` keys (plus documented synonyms) to these concepts; when a concept is unavailable from filings, emit `missing_inputs` instead of guessing.
+
+---
+
+#### **Metric calculation spec (acceptance source of truth)**
+
+##### **0. Global conventions**
+
+- **Money units:** Numerator and denominator inside a single formula must share one scale (for example both in dollars or both in millions); never mix scales.
+- **Two percentage conventions:**
+  - DCF and growth math use **decimals**: `8% = 0.08`.
+  - PEG / PEGY denominators use **whole percentage points**: `8% = 8` (not `0.08`).  
+    Example: `PE = 20`, `CAGR = 10%` → `PEG = 20 / 10 = 2`, not `20 / 0.10`.
+- **Margin of safety (default 30%):**
+
+```text
+margin_of_safety = 30%
+margin_of_safety_price = intrinsic_value × (1 - 30%) = intrinsic_value × 70%
+```
+
+- **Persistence:** Persist every default parameter (`r`, `g_tv`, margin of safety, default retention, default payout, default effective tax rate, Munger exit multiples, and so on) inside `derived_metrics` for audit and replay.
+
+##### **1. Valuation metrics**
+
+**1.1 OE-DCF (owner earnings DCF)**
+
+- **Defaults:** `r = 10% = 0.10`, `g_tv = 3% = 0.03`, forecast years `n = 10`, margin of safety `30%`.
+- **Maintenance capex:**
+
+```text
+if D&A > 0: maintenance_capex = min(capex, D&A)
+if D&A <= 0: maintenance_capex = capex
+```
+
+Where `D&A = depreciation_and_amortization` and `capex = cash_paid_for_ppe_and_intangibles` (map from cash-flow statement tags per SEC).
+
+- **Owner earnings OE:**
+
+```text
+OE = net_income_attributable_to_parent + D&A - maintenance_capex
+```
+
+- **Smoothed OE:** Arithmetic mean of OE over the **latest up to 3** fiscal years; `avg_OE_per_share = avg_OE / shares_outstanding_current`.
+- **Growth rate g (decimal):** Prefer the **median** of OE year-over-year changes over the **latest up to 7** years:
+
+```text
+OE_YoY_i = (OE_i - OE_{i-1}) / OE_{i-1}
+median_g = median(OE_YoY)
+```
+
+- **Growth ceiling:**
+
+```text
+ROE = net_income_attributable_to_parent / parent_shareholders_equity
+      (default: period-end equity; if using average equity, disclose in derived payload)
+payout_ratio = cash_dividends / net_income_attributable_to_parent
+retention_ratio = 1 - payout_ratio
+g_ceiling = min(ROE × retention_ratio, 0.25)
+```
+
+If payout is unreliable: **default retention ≈ 60%** (disclose in payload).  
+**Final:** `g = max(0, min(median_g, g_ceiling))` with `g` as a decimal.
+
+- **DCF:**
+
+```text
+PV_stage1 = Σ[ avg_OE_per_share × (1 + g)^t / (1 + r)^t ],  t = 1..10
+OE_10 = avg_OE_per_share × (1 + g)^10
+terminal_value = OE_10 × (1 + g_tv) / (r - g_tv)
+PV_terminal = terminal_value / (1 + r)^10
+OE_DCF_core = PV_stage1 + PV_terminal
+net_cash_per_share = net_cash / shares_outstanding
+OE_DCF_total = OE_DCF_core + net_cash_per_share
+OE_DCF_margin_of_safety_price = OE_DCF_total × 70%
+```
+
+**1.2 Munger-style horizon valuation**
+
+- **Structure:**
+
+```text
+V = PV_dividends + PV_terminal_equity_value + net_cash_per_share
+```
+
+- **Inputs:** Same `avg_OE_per_share`; same `g` rules as OE-DCF; `r` default `10%`; `n` default `10`; `payout` = **3-year average** payout ratio; if no dividend data use **`payout = 40%`** (disclose).
+
+```text
+payout_ratio = cash_dividends / net_income_attributable_to_parent
+EPS_10 = avg_OE_per_share × (1 + g)^10
+PV_dividends = Σ[ avg_OE_per_share × (1 + g)^t × payout / (1 + r)^t ],  t = 1..10
+```
+
+- **Exit PE multiples:** conservative `15x`, base `20x`, optimistic `25x`.
+
+```text
+exit_value_15 = EPS_10 × 15 / (1 + r)^10
+exit_value_20 = EPS_10 × 20 / (1 + r)^10
+exit_value_25 = EPS_10 × 25 / (1 + r)^10
+munger_15 = PV_dividends + exit_value_15 + net_cash_per_share
+munger_20 = PV_dividends + exit_value_20 + net_cash_per_share
+munger_25 = PV_dividends + exit_value_25 + net_cash_per_share
+munger_k_margin_of_safety_price = munger_k × 70%   (k ∈ {15,20,25})
+```
+
+**1.3 CAGR (general)**
+
+```text
+CAGR = (ending / beginning)^(1 / n) - 1
+```
+
+- **EPS CAGR storage:** Persist as **whole percentage points** (for example `10.0` means 10%, not `0.10`).
+- **EPS series:** Prefer `real_eps`; fall back to **basic EPS**. Default window **3 years**; if starting EPS `<= 0`, walk back to the earliest usable positive EPS (record fiscal start, end, and `n` in payload).
+
+**1.4 PEG**
+
+```text
+PE = spot_price / EPS_for_PE
+```
+
+Prefer `real_eps` for `EPS_for_PE`; if missing or `<= 0`, use basic EPS.
+
+```text
+PEG = PE / CAGR_percent_points
+```
+
+If `CAGR <= 0` or denominator missing, **PEG is not applicable** (structured reason; no fabricated value).
+
+**1.5 PEGY**
+
+```text
+dividend_yield_percent = cash_dividends / market_cap × 100
+market_cap = spot_price × shares_outstanding
+PEGY = PE / (CAGR_percent_points + dividend_yield_percent)
+```
+
+If `CAGR_percent_points + dividend_yield_percent <= 0`, **PEGY is not applicable**.
+
+**1.6 Earnings yield**
+
+```text
+earnings_yield = 1 / PE = EPS / spot_price
+```
+
+Prefer `real_eps` for EPS; may also show `earnings_yield_percent = EPS / spot_price × 100`.
+
+##### **2. Shareholder return and dividends**
+
+**2.1 Cash dividends (source priority)**
+
+- Prefer **pure dividend** cash-flow concepts (map from SEC: common dividends paid, dividends to shareholders, and equivalent tags).
+- If unavailable, fall back to **dividends and interest paid** aggregates (may include interest → payout ratios may read high); set `dividend_source = fallback` in `derived_metrics`.
+
+**2.2 Buybacks and equity issuance**
+
+```text
+buyback_cash = cash_paid_for_share_repurchases (0 if not separately disclosed)
+equity_issuance_cash = cash_from_equity_issuance - minority_equity_issuance
+  (if minority line missing: equity_issuance_cash = cash_from_equity_issuance)
+net_buyback_cash = buyback_cash - equity_issuance_cash
+```
+
+**2.3 Yields**
+
+```text
+market_cap = spot_price × shares_outstanding
+dividend_yield_percent = cash_dividends / market_cap × 100
+net_buyback_yield_percent = net_buyback_cash / market_cap × 100
+total_shareholder_yield_percent = dividend_yield_percent + net_buyback_yield_percent
+                                = (cash_dividends + net_buyback_cash) / market_cap × 100
+```
+
+**2.4 Dividend payout ratio**
+
+```text
+dividend_payout_ratio_percent = cash_dividends / net_income_attributable_to_parent × 100
+```
+
+Cross-check with per-share basis only if share counts align: `DPS / basic_EPS × 100`.
+
+**2.5 Borrow-to-dividend risk (heuristic)**
+
+```text
+distributable_profit_proxy = OE - capex - current_debt_principal_maturities
+```
+
+If `distributable_profit_proxy <= cash_dividends`, flag **borrow-to-dividend / over-distribution risk**. If debt principal maturities are missing, do not assert the flag; return `missing_inputs`.
+
+##### **3. Quality and risk metrics**
+
+**3.1 Pledged shares to total shares**
+
+```text
+pledge_ratio_percent = pledged_shares / total_shares × 100
+```
+
+If upstream data supplies a pledge ratio directly, you may use it. Watch share units. Denominator is **company total shares**, not controlling shareholder stake.
+
+**3.2 Book effective tax rate and benchmarks**
+
+```text
+book_effective_tax_rate_percent = income_tax_expense / EBT × 100
+theoretical_tax_at_25_percent = EBT × 25%
+theoretical_tax_at_15_percent = EBT × 15%
+book_tax_to_theoretical_25_ratio_percent = income_tax_expense / (EBT × 25%) × 100
+cash_taxes_to_theoretical_25_ratio_percent = cash_taxes_paid / (EBT × 25%) × 100
+```
+
+Note: `cash_taxes_paid` is not always corporate income tax alone (may include VAT and other levies); treat as supplemental.
+
+**3.3 Goodwill to equity**
+
+```text
+goodwill_to_equity_percent = goodwill / equity_denominator × 100
+```
+
+`equity_denominator` priority: total shareholders’ equity; then parent equity; then other consolidated equity tags per available SEC mapping.
+
+**3.4 Cash conversion (OCF to net income)**
+
+```text
+ocf_to_net_income = operating_cash_flow / net_income_attributable_to_parent
+```
+
+May display as a multiple (for example `1.37`) or `ocf_to_net_income_percent = OCF / net_income × 100`.
+
+**3.5 ROIC (approximate)**
+
+```text
+EBIT ≈ operating_income + max(interest_expense, 0)
+```
+
+If interest expense is negative (net interest income), do not add back.
+
+```text
+effective_tax_rate = income_tax_expense / EBT
+clamp effective_tax_rate to [0, 0.50]; if missing inputs, default to 0.25 (disclose)
+NOPAT = EBIT × (1 - effective_tax_rate)
+```
+
+```text
+interest_bearing_debt =
+  short_term_borrowings
++ trading_financial_liabilities_interest_bearing (if disclosed)
++ current_portion_of_long_term_debt (interest-bearing portion; if indivisible, use reported total and document in metadata)
++ long_term_borrowings
++ bonds_payable
++ lease_liabilities (if disclosed)
+```
+
+```text
+invested_capital ≈ interest_bearing_debt + parent_shareholders_equity - cash_and_equivalents
+  (pick one cash field available in base_metrics and use consistently; record the choice)
+ROIC = NOPAT / invested_capital
+```
+
+If `invested_capital <= 0` or required inputs are missing, **ROIC is not applicable**; return `missing_inputs`.
+
+##### **4. Pricing power and profitability (in-table annual metrics)**
+
+- **Margins (same fiscal year):**
+
+```text
+gross_margin_percent = gross_profit / revenue × 100
+operating_margin_percent = operating_income / revenue × 100
+net_margin_percent = net_income_attributable_to_parent / revenue × 100
+```
+
+If `revenue <= 0`, the margin is not applicable.
+
+- **3-year CAGR:** Compute separately for revenue, gross profit, operating income, and net income using **section 1.3** rules (whole percentage points out; walk back if the start value is non-positive; record the window).
+
+- **Year-over-year trends:** Where two consecutive years exist for revenue, gross profit, operating income, net income, and the margin series:
+
+```text
+YoY = (current_year - prior_year) / prior_year
+```
+
+Whether YoY is stored as a decimal or whole percentage points must be consistent per column and documented in `derived_metrics`.
+
+---
+
+#### **Table semantics and calculation rules**
+
+- Each table row represents a year using annual `10-K` data by default.
+- If the newest year has no annual `10-K`, the frontend may show the latest `10-Q` as a clearly labeled provisional current-year row.
+- Backend calculations must use consistent units within each formula and must not mix absolute values with compact display units.
+- Multi-year calculations must use the historical series available for that company and must record the lookback window actually used (for example 3-year OE average, up-to-7-year OE YoY median, 3-year payout average, EPS CAGR start/end years).
+- Metrics that require missing market inputs (spot price, shares, market cap), dividend data, buyback data, pledge data, debt maturity data, or other SEC gaps must return structured `missing_inputs` diagnostics instead of fabricated values.
+
+**Acceptance Criteria:**
+
+- The Python engine implements a dedicated derived-metrics module that implements **the formulas in this story card verbatim** (including defaults, clamps, inapplicable cases, and `missing_inputs` rules) and calculates values per annual reporting year after base SEC facts are parsed.
+- The new derived metrics are stored under clear **English** keys inside `financial_metrics.derived_metrics` without mutating `base_metrics`; each multi-year or valuation result includes **lookback metadata** and **parameter disclosure** where applicable.
+- Go Gateway continues to read financial history only through sqlc-generated queries and returns the expanded `derived_metrics` JSONB without hand-written row scanning.
+- The frontend financial table displays yearly rows with grouped columns for valuation, shareholder returns, quality/risk, and pricing power, aligned to the metric names implied above.
+- The table shows readable formatting for large money values, percentages, multiples, and unavailable metrics.
+- The frontend must surface missing-input states such as `Market data required`, `Dividend data unavailable`, or `SEC fact unavailable` rather than showing misleading zeros.
+- Unit tests cover core formulas (OE-DCF, Munger three-band exits, EPS CAGR percent-point storage, PEG/PEGY denominator conventions, shareholder-return chain, tax and approximate ROIC), missing-input behavior, default parameter disclosure, and year-by-year calculation alignment.
+- Browser E2E verifies a real ticker sync and confirms that the frontend table visibly renders derived metric columns for multiple historical years.
+
+---
+
+**User Story 8: Derived Metrics Data Completeness + Metric Glossary**
+
+**Role:** Fundamental Analyst / Frontend User  
+**Requirement:** I want the yearly derived-metrics table to maximize SEC-computable coverage and provide a bottom-page glossary that explains each metric's meaning and calculation formula.  
+**Reason:** So I can distinguish true data unavailability from mapping/calculation gaps and understand the analytical intent of each displayed column.
+
+**Scope & Boundaries:**
+
+- **In-Scope:** E2E-driven missing-data diagnosis, parser tag coverage fixes for SEC-available inputs, derived-metric readiness fixes, and frontend glossary rendering sourced from the same metric schema used by the table.
+- **Out-of-Scope:** Introducing a new third-party market data provider in this card; market-dependent metrics may remain unavailable with explicit missing-input diagnostics.
+
+**Acceptance Criteria:**
+
+- A Playwright E2E run against the local running stack captures current missing-cell states and classifies each as expected (market-input missing) vs unexpected (SEC-computable but unavailable).
+- For SEC-computable metrics, parser mappings and derived calculations are corrected so affected columns resolve to `ready` wherever required filing inputs exist.
+- For truly unavailable inputs, backend payloads keep structured `missing_inputs` reasons and frontend keeps explicit non-zero placeholders (`Market data required`, `Dividend data unavailable`, `SEC fact unavailable`).
+- The dashboard renders a bottom glossary section that lists each derived table metric with:
+  - metric name
+  - plain-language meaning
+  - formula used
+  - missing/inapplicable display rule
+- Glossary definitions are driven from a single frontend schema source shared with column definitions to avoid drift between table headers and documentation.
+- Unit tests cover glossary rendering and at least one representative missing-state mapping path; E2E confirms glossary visibility and grouped table integrity.
+
+---
+
+**User Story 9: SEC Base-Fact Mapping Completeness for AAPL and COST**
+
+**Role:** Fundamental Analyst / Data Quality Owner  
+**Requirement:** I want the SEC parser and annual derived-metrics pipeline to treat obvious blank cells in `AAPL` and `COST` as a base-fact coverage defect first, expand the supported SEC tag candidates for those companies, and make the yearly table render fully populated for all SEC-computable columns on the page.  
+**Reason:** So that the terminal reflects a trustworthy financial baseline for large-cap US issuers and does not present avoidable blanks on basic accounting fields because the fallback tag list is incomplete.
+
+**PRD + Tech-Stack Alignment Constraints:**
+
+- This card must stay inside the documented architecture: Next.js 15 frontend, Go Gin gateway, Python FastAPI analysis engine, and PostgreSQL JSONB pass-through.
+- The remediation path must preserve the PRD rule that raw filing data is extracted from SEC EDGAR and persisted as normalized `base_metrics` plus separate `derived_metrics`; no frontend hardcoding or Go-side manual patching is allowed.
+- This card must not introduce a third-party market-data dependency to satisfy table completeness. If a metric truly requires market inputs by formula, that metric remains explicitly missing and is not in scope for this card.
+- The implementation must prefer richer SEC tag coverage, period-aligned parsing, and annual-filing correctness over display-only fallback behavior.
+
+**Scope & Boundaries:**
+
+- **In-Scope:** expanding SEC XBRL synonym coverage for already-modeled base facts, tightening period-aligned fact selection where basic values are being missed, repairing downstream SEC-computable yearly derived metrics that are blank only because upstream base facts were not captured, and verifying the result specifically on `AAPL` and `COST`.
+- **Out-of-Scope:** adding new valuation formulas, changing the table layout, fabricating placeholder zeros, relaxing required-market-input rules, or backfilling unsupported metrics with non-SEC sources.
+
+**Definition of “Basic Data” for This Card:**
+
+- “Basic data” means metrics that should be obtainable directly from SEC filings for mature US issuers such as Apple and Costco, including but not limited to revenue, gross profit, cost of revenue, operating income, net income, operating cash flow, capex, depreciation and amortization, assets, liabilities, equity, debt structure, taxes, dividends, buybacks, share counts, and other already-modeled annual accounting facts.
+- This card assumes that when one of these fields is blank for `AAPL` or `COST`, the first debugging hypothesis is incomplete SEC tag coverage or period matching, not true data absence.
+
+**Acceptance Criteria:**
+
+- A field-by-field audit is run against the live local yearly table for `AAPL` and `COST`, and every blank or unavailable cell is classified into one of only two buckets:
+  - `SEC-computable and must be fixed in this card`
+  - `Formula requires non-SEC market inputs and may remain explicitly unavailable`
+- For both `AAPL` and `COST`, all table cells driven by SEC-computable inputs must render a non-empty value on the page after a fresh sync, rather than `SEC fact unavailable`, `Dividend data unavailable`, or an empty-looking placeholder.
+- The parser fallback list for already-supported canonical fields is expanded wherever `AAPL` or `COST` disclose the fact under a different valid SEC taxonomy tag than the current candidate set covers.
+- Period alignment must be verified so the engine does not miss a basic annual fact merely because the chosen anchor period is stricter than the companyfacts payload requires for that issuer’s filing pattern.
+- Any yearly derived metric that is currently blank only because one upstream SEC-computable base fact was missed must become `ready` once the base fact mapping is repaired.
+- Metrics that still require market inputs by design, such as `PE`, `PEG`, yield metrics tied to `spot_price`, or other explicitly market-derived outputs, must continue to return structured missing diagnostics and are not counted as defects for this card.
+- Verification for this card must use both:
+  - direct API inspection of `GET /api/v1/financials/AAPL` and `GET /api/v1/financials/COST`
+  - browser verification on `http://localhost:3000` after a fresh sync for both tickers
+- Regression coverage must include parser and/or sync tests that lock in the newly supported SEC tags or period-selection behavior for the repaired facts, so `AAPL` and `COST` do not regress on future refactors.
+
+**Implementation Notes:**
+
+- Treat `AAPL` and `COST` as must-pass sample companies for completeness, not as one-off exceptions; any added mapping should improve the general parser vocabulary for other US issuers where possible.
+- Prefer canonical parser improvements in the Python engine over page-level presentation workarounds.
+- Keep the current JSONB contract intact so the Go Gateway remains a pass-through reader and the frontend continues to consume the existing financial payload shape.
+
+---
+
+**User Story 10: AAPL and COST Zero-Blank Table Completion**
+
+**Role:** Product Owner / Fundamental Analyst  
+**Requirement:** I want the yearly table on `localhost:3000` to show a visible value in every rendered cell for `AAPL` and `COST`, and I want this card to be the final acceptance gate for those two sample companies.  
+**Reason:** So that the product can be judged against a concrete user-facing standard instead of a partially complete backend-coverage standard, and so backlog ownership is unambiguous for the “no blanks on the table” outcome.
+
+**Relationship to Existing Cards:**
+
+- This card is the user-facing completion card for `AAPL` and `COST`.
+- Story 8 remains the general SEC-computable completeness and glossary card.
+- Story 9 remains the parser/base-fact remediation card for SEC mapping gaps.
+- A blank table cell for `AAPL` or `COST` is not considered fully resolved until this card passes, even if Story 8 or Story 9 are individually marked complete.
+
+**PRD + Tech-Stack Alignment Constraints:**
+
+- The solution must remain within the documented architecture: Next.js 15 frontend, Go Gin gateway, Python FastAPI engine, and PostgreSQL JSONB storage/query flow.
+- The card may be satisfied by one or both of the following implementation paths, as long as the final page shows no blank cells for `AAPL` and `COST`:
+  - expanding SEC-based parsing/calculation coverage for values that should come from EDGAR filings
+  - adding an explicitly approved market-data enrichment path for metrics whose formulas require price, yield, or market-cap inputs
+- No frontend hardcoded per-company literals are allowed.
+- Any new enrichment source must still persist normalized data through the existing backend pipeline instead of bypassing Go/Python/DB contracts.
+
+**Scope & Boundaries:**
+
+- **In-Scope:** any backend or data-pipeline work needed to make every rendered yearly table cell for `AAPL` and `COST` display a value, including SEC tag coverage expansion, period-selection fixes, derived-metric dependency repairs, and market-data enrichment where the formula inherently requires market inputs.
+- **Out-of-Scope:** weakening formulas to force fake values, hiding columns only for these tickers, or inserting manual one-off values outside the normal data flow.
+
+**Acceptance Criteria:**
+
+- After a fresh sync and page load for `AAPL`, every rendered cell in the yearly table shows a visible value; no cell may display as blank, `SEC fact unavailable`, `Dividend data unavailable`, `Market data required`, or any equivalent missing-state placeholder.
+- After a fresh sync and page load for `COST`, every rendered cell in the yearly table shows a visible value; no cell may display as blank, `SEC fact unavailable`, `Dividend data unavailable`, `Market data required`, or any equivalent missing-state placeholder.
+- If a displayed metric depends on market inputs by formula, this card requires the system to source and persist those inputs through the normal backend pipeline so the final cell still resolves to a value.
+- If a displayed metric depends only on SEC filing data, this card requires the parser/calculation path to be repaired so the final cell resolves to a value whenever the issuer disclosed the necessary facts.
+- Verification must be performed at the actual product surface, not API-only:
+  - browser verification on `http://localhost:3000` for `AAPL`
+  - browser verification on `http://localhost:3000` for `COST`
+  - screenshot or equivalent evidence showing the full table state for both sample tickers
+- Supporting regression coverage must be added so future changes cannot reintroduce blank or placeholder cells for `AAPL` and `COST`.
+
+**Implementation Notes:**
+
+- This card intentionally resolves the ambiguity between “maximize SEC-computable coverage” and “make the user-facing table fully populated.”
+- Story 8 and Story 9 may each deliver part of the solution, but this card is the single source of truth for the final user-visible acceptance outcome.
