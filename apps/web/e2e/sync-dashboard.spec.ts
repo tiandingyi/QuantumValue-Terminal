@@ -1,6 +1,40 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 
-test("syncing COST updates the dashboard and renders historical filing data", async ({ page }) => {
+async function syncTickerAndAssertNoPlaceholders(page: Page, ticker: string, expectedCompanyHeading: string) {
+  const tickerInput = page.getByLabel("Ticker symbol");
+  const syncButton = page.getByRole("button", { name: "Sync ticker" });
+
+  await tickerInput.fill(ticker);
+  await expect(syncButton).toHaveCSS("cursor", "pointer");
+  await syncButton.click();
+
+  await expect(page.getByTestId("active-ticker")).toContainText(ticker.toUpperCase());
+  await expect(page.getByText(expectedCompanyHeading)).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Revenue vs. Net Income" })).toBeVisible({ timeout: 60_000 });
+  await expect(page.getByRole("heading", { name: "Free Cash Flow" })).toBeVisible();
+  await expect(page.getByText(/^Pending$/)).toHaveCount(0);
+
+  const filingHistory = page.getByTestId("filing-history");
+  await expect(filingHistory).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Year" })).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Filing" })).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Valuation" })).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Shareholder Returns" })).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Quality / Risk" })).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Pricing Power" })).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "OE-DCF", exact: true })).toBeVisible();
+  await expect(filingHistory.getByRole("columnheader", { name: "Revenue YoY" })).toBeVisible();
+  await expect(
+    filingHistory.getByText(/Market data required|SEC fact unavailable|Dividend data unavailable|Not applicable/),
+  ).toHaveCount(0);
+
+  const glossary = page.getByTestId("metric-glossary");
+  await expect(glossary).toBeVisible();
+  await expect(glossary.getByText("Meaning and formulas")).toBeVisible();
+  await expect(glossary.getByText("Formula: PE / CAGR_percent_points")).toBeVisible();
+}
+
+test("syncing AAPL and COST renders zero-placeholder yearly tables", async ({ page }) => {
   const observedRequests: string[] = [];
 
   page.on("request", (request) => {
@@ -13,38 +47,22 @@ test("syncing COST updates the dashboard and renders historical filing data", as
   await page.goto("/");
 
   const tickerInput = page.getByLabel("Ticker symbol");
-  const syncButton = page.getByRole("button", { name: "Sync ticker" });
 
   await expect(tickerInput).toHaveValue("AAPL");
   await expect(page.getByTestId("active-ticker")).toContainText("AAPL");
 
-  await tickerInput.fill("cost");
-  await expect(syncButton).toHaveCSS("cursor", "pointer");
+  await syncTickerAndAssertNoPlaceholders(page, "AAPL", "Apple Inc. filings");
 
-  await syncButton.click();
-
-  await expect(page.getByTestId("active-ticker")).toContainText("COST");
-  await expect(page.getByText("COSTCO WHOLESALE CORP /NEW filings")).toBeVisible({ timeout: 60_000 });
-  await expect(page.getByRole("heading", { name: "Revenue vs. Net Income" })).toBeVisible();
-  await expect(page.getByRole("heading", { name: "Free Cash Flow" })).toBeVisible();
-  await expect(page.getByText("Market data input required")).toHaveCount(0);
-  await expect(page.getByText("Pending")).toHaveCount(0);
-
-  const filingHistory = page.getByTestId("filing-history");
-  await expect(filingHistory).toBeVisible();
-  await expect(filingHistory.getByRole("columnheader", { name: "Period" })).toBeVisible();
-  await expect(filingHistory.getByRole("columnheader", { name: "Report" })).toBeVisible();
-  await expect(filingHistory.getByRole("columnheader", { name: "Revenue USD" })).toBeVisible();
-  await expect(filingHistory.getByText("2026 latest 10-Q")).toBeVisible();
-  await expect(filingHistory.getByText("2025 10-K")).toBeVisible();
-  await expect(filingHistory.getByText("2025 latest 10-Q")).toHaveCount(0);
-  await expect(filingHistory.getByText(/US\$\d+(\.\d+)?B/).first()).toBeVisible();
+  await syncTickerAndAssertNoPlaceholders(page, "cost", "COSTCO WHOLESALE CORP /NEW filings");
 
   await page.screenshot({
     path: "../../output/playwright/sync-dashboard-cost.png",
     fullPage: true,
   });
 
+  expect(observedRequests.some((request) => request.includes("/api/v1/sync/AAPL"))).toBe(true);
+  expect(observedRequests.some((request) => request.includes("/api/v1/status/AAPL"))).toBe(true);
+  expect(observedRequests.some((request) => request.includes("/api/v1/financials/AAPL"))).toBe(true);
   expect(observedRequests.some((request) => request.includes("/api/v1/sync/COST"))).toBe(true);
   expect(observedRequests.some((request) => request.includes("/api/v1/status/COST"))).toBe(true);
   expect(observedRequests.some((request) => request.includes("/api/v1/financials/COST"))).toBe(true);

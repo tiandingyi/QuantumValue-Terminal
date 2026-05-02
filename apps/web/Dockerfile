@@ -19,8 +19,8 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
 COPY . .
 
-ARG NEXT_PUBLIC_API_BASE_URL
-ARG INTERNAL_API_BASE_URL
+ARG NEXT_PUBLIC_API_BASE_URL=http://localhost:8080
+ARG INTERNAL_API_BASE_URL=http://api-go:8080
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL}
 ENV INTERNAL_API_BASE_URL=${INTERNAL_API_BASE_URL}
 

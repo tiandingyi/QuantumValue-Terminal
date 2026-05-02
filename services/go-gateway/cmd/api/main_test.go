@@ -70,18 +70,20 @@ func TestHealthzReturnsConfiguredEngine(t *testing.T) {
 func TestCorsPreflightReturnsNoContent(t *testing.T) {
 	// Confirm the shared CORS configuration still handles browser preflight requests.
 	router := setupRouter("http://engine.test")
-	request := httptest.NewRequest(http.MethodOptions, "/api/v1/handshake", nil)
-	request.Header.Set("Origin", "http://localhost:3000")
-	response := httptest.NewRecorder()
+	for _, origin := range []string{"http://localhost:3000", "http://localhost:3001"} {
+		request := httptest.NewRequest(http.MethodOptions, "/api/v1/handshake", nil)
+		request.Header.Set("Origin", origin)
+		response := httptest.NewRecorder()
 
-	router.ServeHTTP(response, request)
+		router.ServeHTTP(response, request)
 
-	if response.Code != http.StatusNoContent {
-		t.Fatalf("expected status %d, got %d", http.StatusNoContent, response.Code)
-	}
+		if response.Code != http.StatusNoContent {
+			t.Fatalf("expected status %d for %s, got %d", http.StatusNoContent, origin, response.Code)
+		}
 
-	if response.Header().Get("Access-Control-Allow-Origin") != "http://localhost:3000" {
-		t.Fatalf("expected allowed origin header to be echoed")
+		if response.Header().Get("Access-Control-Allow-Origin") != origin {
+			t.Fatalf("expected allowed origin header to echo %s", origin)
+		}
 	}
 }
 

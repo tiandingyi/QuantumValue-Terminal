@@ -15,6 +15,9 @@ def test_parse_financial_metric_maps_synonym_tags() -> None:
                     "GrossProfit": {
                         "units": {"USD": [{"end": "2025-12-31", "filed": "2026-02-01", "form": "10-K", "fp": "FY", "val": 900}]}
                     },
+                    "CostOfGoodsAndServicesSold": {
+                        "units": {"USD": [{"end": "2025-12-31", "filed": "2026-02-01", "form": "10-K", "fp": "FY", "val": 1100}]}
+                    },
                     "OperatingIncomeLoss": {
                         "units": {"USD": [{"end": "2025-12-31", "filed": "2026-02-01", "form": "10-K", "fp": "FY", "val": 500}]}
                     },
@@ -56,6 +59,7 @@ def test_parse_financial_metric_maps_synonym_tags() -> None:
     assert isinstance(model, FinancialMetric)
     assert model.revenue == 2000
     assert model.gross_profit == 900
+    assert model.cost_of_revenue == 1100
     assert model.operating_income == 500
     assert model.net_income == 420
     assert model.operating_cash_flow == 610
@@ -212,3 +216,137 @@ def test_parse_financial_metric_handles_missing_optional_metrics_with_warning(ca
 
     assert model.capex is None
     assert "missing metric 'capex'" in caplog.text.lower()
+
+
+# ---------------------------------------------------------------------------
+# Story 9 regression tests – new tag synonyms and computed gross_profit
+# ---------------------------------------------------------------------------
+
+def _base_facts(period: str = "2024-09-28") -> dict:
+    """Minimal us-gaap fact set covering all 13 required fields."""
+    def entry(val, unit="USD"):
+        return {"units": {unit: [{"end": period, "filed": "2025-01-01", "form": "10-K", "fp": "FY", "val": val}]}}
+
+    return {
+        "facts": {
+            "us-gaap": {
+                "RevenueFromContractWithCustomerExcludingAssessedTax": entry(391035000000),
+                "GrossProfit": entry(177127000000),
+                "CostOfGoodsAndServicesSold": entry(213908000000),
+                "OperatingIncomeLoss": entry(123216000000),
+                "NetIncomeLoss": entry(93736000000),
+                "NetCashProvidedByUsedInOperatingActivities": entry(118254000000),
+                "PaymentsToAcquirePropertyPlantAndEquipment": entry(9447000000),
+                "DepreciationDepletionAndAmortization": entry(11445000000),
+                "Assets": entry(364980000000),
+                "Liabilities": entry(308030000000),
+                "StockholdersEquity": entry(56950000000),
+                "LongTermDebt": entry(85750000000),
+                "EarningsPerShareDiluted": entry(6.11, "USD/shares"),
+                "WeightedAverageNumberOfDilutedSharesOutstanding": entry(15343783000, "shares"),
+            }
+        }
+    }
+
+
+def test_capex_falls_back_to_payments_to_acquire_productive_assets() -> None:
+    """PaymentsToAcquireProductiveAssets is used for early AAPL-style filings."""
+    facts = _base_facts("2008-09-27")
+    gaap = facts["facts"]["us-gaap"]
+    # Remove the standard capex tag; use the older synonym instead
+    del gaap["PaymentsToAcquirePropertyPlantAndEquipment"]
+    gaap["PaymentsToAcquireProductiveAssets"] = {
+        "units": {"USD": [{"end": "2008-09-27", "filed": "2008-11-05", "form": "10-K", "fp": "FY", "val": 1091000000}]}
+    }
+
+    model = parse_financial_metric(facts)
+    assert model.capex == 1091000000
+    assert model.source_tags["capex"] == "PaymentsToAcquireProductiveAssets"
+
+
+def test_interest_expense_falls_back_to_interest_expense_debt() -> None:
+    """InterestExpenseDebt covers AAPL periods where InterestExpense is absent."""
+    facts = _base_facts()
+    gaap = facts["facts"]["us-gaap"]
+    gaap["InterestExpenseDebt"] = {
+        "units": {"USD": [{"end": "2024-09-28", "filed": "2025-01-01", "form": "10-K", "fp": "FY", "val": 3000000000}]}
+    }
+
+    model = parse_financial_metric(facts)
+    assert model.interest_expense == 3000000000
+    assert model.source_tags["interest_expense"] == "InterestExpenseDebt"
+
+
+def test_interest_expense_falls_back_to_interest_expense_nonoperating() -> None:
+    """InterestExpenseNonoperating covers COST-style recent filings."""
+    facts = _base_facts("2025-08-31")
+    gaap = facts["facts"]["us-gaap"]
+    gaap["InterestExpenseNonoperating"] = {
+        "units": {"USD": [{"end": "2025-08-31", "filed": "2025-10-10", "form": "10-K", "fp": "FY", "val": 182000000}]}
+    }
+
+    model = parse_financial_metric(facts)
+    assert model.interest_expense == 182000000
+    assert model.source_tags["interest_expense"] == "InterestExpenseNonoperating"
+
+
+def test_cash_dividends_falls_back_to_dividends_common_stock_cash() -> None:
+    """DividendsCommonStockCash is used by COST instead of PaymentsOfDividendsCommonStock."""
+    facts = _base_facts("2024-09-01")
+    gaap = facts["facts"]["us-gaap"]
+    gaap["DividendsCommonStockCash"] = {
+        "units": {"USD": [{"end": "2024-09-01", "filed": "2024-10-10", "form": "10-K", "fp": "FY", "val": 1519000000}]}
+    }
+
+    model = parse_financial_metric(facts)
+    assert model.cash_dividends == 1519000000
+    assert model.source_tags["cash_dividends"] == "DividendsCommonStockCash"
+
+
+def test_gross_profit_computed_from_revenue_minus_cost_of_revenue() -> None:
+    """When GrossProfit tag is absent, gross_profit is derived from revenue - cost_of_revenue.
+
+    This covers COST-style filings where revenue and COGS are reported separately
+    but no GrossProfit XBRL tag is present for the anchor period.
+    """
+    period = "2024-09-01"
+
+    def entry(val):
+        return {"units": {"USD": [{"end": period, "filed": "2024-10-10", "form": "10-K", "fp": "FY", "val": val}]}}
+
+    facts = {
+        "facts": {
+            "us-gaap": {
+                "RevenueFromContractWithCustomerExcludingAssessedTax": entry(254453000000),
+                # No GrossProfit tag — COST pattern
+                "CostOfGoodsAndServicesSold": entry(222358000000),
+                "OperatingIncomeLoss": entry(9285000000),
+                "NetIncomeLoss": entry(7367000000),
+                "NetCashProvidedByUsedInOperatingActivities": entry(11068000000),
+                "PaymentsToAcquirePropertyPlantAndEquipment": entry(4710000000),
+                "DepreciationDepletionAndAmortization": entry(2458000000),
+                "Assets": entry(69830000000),
+                "Liabilities": entry(41358000000),
+                "StockholdersEquity": entry(27472000000),
+                "LongTermDebt": entry(5377000000),
+                "EarningsPerShareDiluted": {"units": {"USD/shares": [{"end": period, "filed": "2024-10-10", "form": "10-K", "fp": "FY", "val": 16.56}]}},
+                "WeightedAverageNumberOfDilutedSharesOutstanding": {"units": {"shares": [{"end": period, "filed": "2024-10-10", "form": "10-K", "fp": "FY", "val": 444757000}]}},
+            }
+        }
+    }
+
+    model = parse_financial_metric(facts)
+
+    assert model.gross_profit == 254453000000 - 222358000000
+    assert model.source_tags["gross_profit"] == "_computed:revenue-cost_of_revenue"
+
+
+def test_gross_profit_tag_takes_precedence_over_computed() -> None:
+    """When GrossProfit tag is present, it is preferred over the computed fallback."""
+    facts = _base_facts()
+    # GrossProfit tag is present in _base_facts, cost_of_revenue would give a different value
+    model = parse_financial_metric(facts)
+
+    assert model.gross_profit == 177127000000
+    assert model.source_tags["gross_profit"] == "GrossProfit"
+

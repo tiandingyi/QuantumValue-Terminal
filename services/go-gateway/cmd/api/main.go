@@ -238,7 +238,7 @@ func buildCORSConfig() gincors.Config {
 }
 
 func allowedOrigins() []string {
-	origins := getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://web:3000")
+	origins := getEnv("ALLOWED_ORIGINS", "http://localhost:3000,http://localhost:3001,http://web:3000")
 	values := strings.Split(origins, ",")
 	result := make([]string, 0, len(values))
 	for _, value := range values {

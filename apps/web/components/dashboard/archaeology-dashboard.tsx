@@ -15,6 +15,9 @@ import {
 import { Line } from "react-chartjs-2";
 
 import {
+  derivedColumnGroups,
+  derivedTableColumns,
+  buildDerivedGlossary,
   FinancialsResponse,
   buildFilingRows,
   buildScorecard,
@@ -135,6 +138,8 @@ export function ArchaeologyDashboard({ activeTicker, refreshToken }: Archaeology
   const trendPoints = useMemo(() => (financials ? buildTrendPoints(financials) : []), [financials]);
   const scorecard = useMemo(() => (financials ? buildScorecard(financials) : []), [financials]);
   const filingRows = useMemo(() => (financials ? buildFilingRows(financials) : []), [financials]);
+  const columnGroups = useMemo(() => derivedColumnGroups(), []);
+  const metricGlossary = useMemo(() => buildDerivedGlossary(), []);
   const incompleteHistory = financials ? hasIncompleteHistory(trendPoints) : false;
 
   const revenueChartData = useMemo<ChartData<"line">>(
@@ -237,29 +242,67 @@ export function ArchaeologyDashboard({ activeTicker, refreshToken }: Archaeology
               <table className="min-w-full border-collapse text-left text-sm">
                 <thead className="border-b border-white/10 text-xs uppercase tracking-[0.22em] text-slate-500">
                   <tr>
-                    <th className="px-4 py-3 font-medium">Period</th>
-                    <th className="px-4 py-3 font-medium">Report</th>
-                    <th className="px-4 py-3 font-medium">Filed</th>
-                    <th className="px-4 py-3 font-medium">Revenue USD</th>
-                    <th className="px-4 py-3 font-medium">Net Income USD</th>
-                    <th className="px-4 py-3 font-medium">FCF USD</th>
-                    <th className="px-4 py-3 font-medium">Owner Earnings USD</th>
+                    <th className="px-4 py-3 font-medium" rowSpan={2}>
+                      Year
+                    </th>
+                    <th className="px-4 py-3 font-medium" rowSpan={2}>
+                      Filing
+                    </th>
+                    <th className="px-4 py-3 font-medium" rowSpan={2}>
+                      Filed
+                    </th>
+                    {columnGroups.map((group) => (
+                      <th key={group.name} className="px-4 py-3 text-center font-medium" colSpan={group.count}>
+                        {group.name}
+                      </th>
+                    ))}
+                  </tr>
+                  <tr>
+                    {derivedTableColumns.map((column) => (
+                      <th key={column.key} className="px-4 py-3 font-medium">
+                        {column.label}
+                      </th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {filingRows.map((row) => (
                     <tr key={`${row.period}-${row.filedAt}`} className="border-b border-white/5 last:border-0">
                       <td className="px-4 py-3 font-mono text-cyan-glow">{row.period}</td>
-                      <td className="px-4 py-3 text-slate-400">{row.formType}</td>
+                      <td className="px-4 py-3 text-slate-400">
+                        {row.rowKind === "annual" ? row.formType : `${row.formType} (provisional)`}
+                      </td>
                       <td className="px-4 py-3 text-slate-400">{row.filedAt}</td>
-                      <td className="px-4 py-3 text-slate-200">{row.revenue}</td>
-                      <td className="px-4 py-3 text-slate-200">{row.netIncome}</td>
-                      <td className="px-4 py-3 text-slate-200">{row.freeCashFlow}</td>
-                      <td className="px-4 py-3 text-slate-200">{row.ownerEarnings}</td>
+                      {derivedTableColumns.map((column) => (
+                        <td key={column.key} className="px-4 py-3 text-slate-200">
+                          {row.cells[column.key]}
+                        </td>
+                      ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            <div className="mt-8 border border-white/10 bg-black/15 p-4 md:p-6" data-testid="metric-glossary">
+              <p className="text-xs uppercase tracking-[0.24em] text-cyan-glow/75">Metric glossary</p>
+              <h3 className="mt-2 text-xl font-semibold text-white">Meaning and formulas</h3>
+              <p className="mt-2 text-sm text-slate-400">
+                Each metric below matches a table column. Missing states are explicit and never replaced with fabricated
+                zeros.
+              </p>
+              <div className="mt-4 space-y-4">
+                {metricGlossary.map((item) => (
+                  <div key={item.key} className="border-t border-white/10 pt-4">
+                    <p className="text-sm font-semibold text-white">
+                      {item.label} <span className="text-xs font-normal text-slate-500">({item.group})</span>
+                    </p>
+                    <p className="mt-1 text-sm text-slate-300">{item.meaning}</p>
+                    <p className="mt-1 font-mono text-xs text-cyan-glow/80">Formula: {item.formula}</p>
+                    <p className="mt-1 text-xs text-slate-500">Missing rule: {item.missingRule}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           </>
         ) : null}

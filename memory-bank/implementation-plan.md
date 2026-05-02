@@ -804,3 +804,41 @@ Whether YoY is stored as a decimal or whole percentage points must be consistent
 
 - This card intentionally resolves the ambiguity between “maximize SEC-computable coverage” and “make the user-facing table fully populated.”
 - Story 8 and Story 9 may each deliver part of the solution, but this card is the single source of truth for the final user-visible acceptance outcome.
+
+**Concrete Repair Plan:**
+
+- **Workstream 1: Close remaining SEC parser coverage gaps**
+  - Audit the canonical parser fallback lists in `services/python-engine/app/parsers/financial_metric_parser.py` against the live `AAPL` and `COST` filing payloads.
+  - Expand candidate tag coverage for still-blank annual accounting facts, prioritizing debt maturity, interest expense, dividend, goodwill, and other already-modeled inputs that are present in EDGAR but not consistently matched by the current fallback list.
+  - Add regression tests that lock in each newly supported synonym or anchor-period behavior using mocked company-facts samples derived from `AAPL` and `COST` disclosure patterns.
+
+- **Workstream 2: Repair annual derived metrics blocked only by upstream fact misses**
+  - Re-run yearly derived calculations after parser fixes and identify which cells remain unresolved only because one upstream SEC-computable base fact was previously missing.
+  - Patch the corresponding formulas or dependency wiring in `services/python-engine/app/calculations/derived_metrics.py` so those metrics resolve to `ready` once the required SEC base fact is present.
+  - Explicitly verify yearly ROIC, tax, dividend, buyback, goodwill/equity, and pricing-power columns for `AAPL` and `COST` after each parser enhancement pass.
+
+- **Workstream 3: Implement market-data enrichment for formula-required columns**
+  - Fill the current market-data hole that leaves `pe_ratio`, `earnings_yield_percent`, `peg_ratio`, `pegy_ratio`, `dividend_yield_percent`, `net_buyback_yield_percent`, and `total_shareholder_yield_percent` unresolved when `spot_price` or `market_cap` is absent.
+  - Route those inputs through the Python engine sync flow so yearly derived metrics are computed from persisted backend data rather than from frontend-only lookups or hardcoded values.
+  - Add regression tests covering positive-EPS PE/PEG/PEGY paths, unavailable market-input handling, and at least one fully populated annual row for both `AAPL` and `COST`.
+
+- **Workstream 4: Improve page-level observability for final triage**
+  - Keep the table contract intact, but make the browser/debug workflow capable of distinguishing `missing` vs `not_applicable` vs market-input dependency during final verification.
+  - Ensure QA can map any remaining visible placeholder back to the underlying `missing_inputs` or `reason` without manual database inspection.
+  - Preserve the user-facing table design while adding enough diagnostics in tests, screenshots, or debug surfaces to prevent repeated blind triage loops.
+
+- **Workstream 5: End-to-end acceptance run for the two must-pass companies**
+  - Run a fresh sync for `AAPL`, reload the dashboard, and verify that every rendered yearly table cell shows a concrete value.
+  - Run a fresh sync for `COST`, reload the dashboard, and verify that every rendered yearly table cell shows a concrete value.
+  - Capture browser evidence and corresponding API snapshots for both companies, and do not mark this card complete until the browser table is zero-blank for both tickers at the same time.
+
+**Known Code Areas Still Not Covered Yet (must be addressed by this card):**
+
+- `services/python-engine/app/parsers/financial_metric_parser.py`
+  - Remaining fallback coverage still needs to be validated company-by-company for `AAPL` and `COST`, even after recent tag additions.
+- `services/python-engine/app/calculations/derived_metrics.py`
+  - The market-dependent branch still leaves PE / PEG / PEGY / yield metrics unresolved whenever `spot_price` or `market_cap` is absent.
+- `services/python-engine/app/main.py`
+  - The sync pipeline must be part of the final verification loop because parser fixes and market-data enrichment only matter if fresh syncs persist the repaired rows.
+- `apps/web/lib/financials.ts`
+  - Final acceptance still needs a stronger debug/verification path because the table currently compresses many backend reasons into generic placeholder labels.

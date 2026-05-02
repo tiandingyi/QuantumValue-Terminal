@@ -14,6 +14,7 @@ from app.calculations.valuation import calculate_valuation_section
 from app.parsers.financial_metric_parser import FinancialMetricMappingError
 from app.persistence.factory import build_persistence_store
 from app.persistence.filing_metadata import extract_all_supported_filings
+from app.providers.market_data import fetch_market_data_for_period
 from app.providers.sec_types import CompanyDataBundle
 from app.providers.us_provider import USProvider
 
@@ -174,7 +175,12 @@ async def finish_sync(ticker: str) -> None:
                     key=lambda item: item[0],
                 )
             ]
-            derived_metrics = calculate_derived_metrics(base_metrics, historical_base_metrics)
+            market_data = fetch_market_data_for_period(
+                ticker=bundle.company.ticker,
+                period_end=filing_metadata.period_end_date,
+                shares_outstanding=base_metrics.shares_outstanding,
+            )
+            derived_metrics = calculate_derived_metrics(base_metrics, historical_base_metrics, market_data=market_data)
             derived_metrics["valuation"] = calculate_valuation_section(base_metrics, historical_base_metrics)
             parsed_filing_bundles.append((filing_metadata, base_metrics, derived_metrics))
 

@@ -19,7 +19,13 @@ METRIC_TAGS: dict[str, list[str]] = {
         "SalesRevenueNet",
         "Revenues",
     ],
-    "gross_profit": ["GrossProfit"],
+    "gross_profit": ["GrossProfit", "GrossProfitLoss"],
+    "cost_of_revenue": [
+        "CostOfGoodsAndServicesSold",
+        "CostOfGoodsSold",
+        "CostOfRevenue",
+        "CostOfSales",
+    ],
     "operating_income": ["OperatingIncomeLoss"],
     "net_income": ["NetIncomeLoss", "ProfitLoss"],
     "operating_cash_flow": [
@@ -30,6 +36,7 @@ METRIC_TAGS: dict[str, list[str]] = {
         "PaymentsToAcquirePropertyPlantAndEquipment",
         "CapitalExpendituresIncurredButNotYetPaid",
         "PropertyPlantAndEquipmentAdditions",
+        "PaymentsToAcquireProductiveAssets",
     ],
     "depreciation_and_amortization": [
         "DepreciationDepletionAndAmortization",
@@ -48,17 +55,131 @@ METRIC_TAGS: dict[str, list[str]] = {
         "LongTermDebtNoncurrent",
         "LongTermDebt",
     ],
+    "short_term_borrowings": [
+        "ShortTermBorrowings",
+        "ShortTermDebt",
+        "CommercialPaper",
+    ],
+    "current_portion_of_long_term_debt": [
+        "LongTermDebtCurrent",
+        "CurrentPortionOfLongTermDebt",
+    ],
+    "bonds_payable": [
+        "LongTermDebtSecurities",
+        "DebtSecurities",
+    ],
+    "lease_liabilities": [
+        "OperatingLeaseLiabilityNoncurrent",
+        "FinanceLeaseLiabilityNoncurrent",
+        "OperatingLeaseLiability",
+        "FinanceLeaseLiability",
+    ],
     "eps_diluted": [
         "EarningsPerShareDiluted",
         "DilutedEarningsPerShare",
         "IncomeLossFromContinuingOperationsPerDilutedShare",
         "BasicAndDilutedEarningsPerShare",
     ],
+    "eps_basic": [
+        "EarningsPerShareBasic",
+        "BasicEarningsPerShare",
+        "IncomeLossFromContinuingOperationsPerBasicShare",
+        "BasicAndDilutedEarningsPerShare",
+    ],
+    "real_eps": [
+        "EarningsPerShareDiluted",
+        "DilutedEarningsPerShare",
+        "EarningsPerShareBasic",
+        "BasicEarningsPerShare",
+    ],
     "shares_outstanding": [
         "WeightedAverageNumberOfDilutedSharesOutstanding",
         "CommonStockSharesOutstanding",
         "WeightedAverageNumberOfShareOutstandingBasicAndDiluted",
         "WeightedAverageNumberOfSharesOutstandingBasic",
+    ],
+    "cash_and_equivalents": [
+        "CashAndCashEquivalentsAtCarryingValue",
+        "CashCashEquivalentsRestrictedCashAndRestrictedCashEquivalents",
+    ],
+    "current_debt": [
+        "ShortTermBorrowings",
+        "LongTermDebtCurrent",
+        "CommercialPaper",
+    ],
+    "interest_expense": [
+        "InterestExpenseAndDebtExpense",
+        "InterestExpense",
+        "InterestExpenseDebt",
+        "InterestExpenseNonoperating",
+        "FinancingInterestExpense",
+        "InterestAndDebtExpense",
+    ],
+    "income_tax_expense": [
+        "IncomeTaxExpenseBenefit",
+        "IncomeTaxes",
+        "IncomeTaxExpenseBenefitContinuingOperations",
+    ],
+    "pretax_income": [
+        "IncomeBeforeTaxExpenseBenefit",
+        "IncomeBeforeIncomeTaxes",
+        "IncomeFromContinuingOperationsBeforeIncomeTaxesMinorityInterestAndIncomeLossFromEquityMethodInvestments",
+        "PretaxIncome",
+        "IncomeLossFromContinuingOperationsBeforeIncomeTaxesExtraordinaryItemsNoncontrollingInterest",
+    ],
+    "cash_taxes_paid": [
+        "IncomeTaxesPaidNet",
+        "IncomeTaxesPaid",
+    ],
+    "cash_dividends": [
+        "PaymentsOfDividendsCommonStock",
+        "PaymentsOfDividends",
+        "DividendsPaid",
+        "DividendsCommonStockCash",
+        "DividendsCash",
+        "PaymentsOfOrdinaryDividends",
+    ],
+    "dividends_and_interest_paid": [
+        "PaymentsOfDividendsAndDividendEquivalentsOnCommonStockAndRestrictedStockUnits",
+        "PaymentsOfDividendsAndDividendEquivalentsOnPreferredStockAndRestrictedStockUnits",
+        "InterestPaidNet",
+    ],
+    "buyback_cash": [
+        "PaymentsForRepurchaseOfCommonStock",
+        "PaymentsForRepurchaseOfEquity",
+    ],
+    "equity_issuance_cash": [
+        "ProceedsFromIssuanceOfCommonStock",
+        "ProceedsFromStockOptionsExercised",
+        "ProceedsFromIssuanceOfSharesUnderIncentiveAndShareBasedCompensationPlansIncludingStockOptions",
+    ],
+    "minority_equity_issuance": [
+        "ProceedsFromIssuanceOfNoncontrollingInterest",
+    ],
+    "goodwill": [
+        "Goodwill",
+        "GoodwillGross",
+    ],
+    "parent_shareholders_equity": [
+        "StockholdersEquity",
+        "StockholdersEquityAttributableToParent",
+        "StockholdersEquityIncludingPortionAttributableToNoncontrollingInterest",
+    ],
+    "pledged_shares": [
+        "PledgedShares",
+        "PledgedAssetsNotSeparatelyReportedOnStatementOfFinancialPosition",
+    ],
+    "total_shares": [
+        "CommonStockSharesOutstanding",
+        "WeightedAverageNumberOfDilutedSharesOutstanding",
+        "WeightedAverageNumberOfSharesOutstandingBasic",
+    ],
+    "current_debt_maturities": [
+        "DebtMaturitiesRepaymentsOfPrincipalInNextTwelveMonths",
+        "LongTermDebtMaturitiesRepaymentsOfPrincipalInNextTwelveMonths",
+        "LongTermDebtMaturitiesRepaymentsOfPrincipalInYearOne",
+        "LongTermDebtAndCapitalLeaseObligationsCurrent",
+        "LongTermDebtCurrent",
     ],
 }
 
@@ -72,7 +193,23 @@ UNIT_MULTIPLIERS = {
 }
 
 ANCHOR_TAGS = METRIC_TAGS["revenue"] + METRIC_TAGS["net_income"]
-DEFAULT_REQUIRED_METRIC_FIELDS = frozenset(METRIC_TAGS.keys())
+DEFAULT_REQUIRED_METRIC_FIELDS = frozenset(
+    {
+        "revenue",
+        "gross_profit",
+        "operating_income",
+        "net_income",
+        "operating_cash_flow",
+        "capex",
+        "depreciation_and_amortization",
+        "assets",
+        "liabilities",
+        "shareholders_equity",
+        "long_term_debt",
+        "eps_diluted",
+        "shares_outstanding",
+    }
+)
 
 
 @dataclass(frozen=True)
@@ -116,17 +253,10 @@ def parse_financial_metric(
     values: dict[str, Any] = {"source_tags": {}}
     aligned_facts: list[dict[str, Any]] = []
 
+    # First pass: resolve all tag-based lookups without enforcing required fields yet.
     for field_name, metric_tags in METRIC_TAGS.items():
         metric = _safe_lookup(store, field_name, metric_tags, anchor)
         if metric is None:
-            if field_name in required_field_names:
-                raise FinancialMetricMappingError(
-                    field_name=field_name,
-                    candidate_tags=metric_tags,
-                    ticker=ticker,
-                    cik=cik,
-                    period_context=_period_context(anchor),
-                )
             values[field_name] = None
             continue
 
@@ -134,6 +264,26 @@ def parse_financial_metric(
         values[field_name] = _normalize_absolute_value(fact.get("val"), fact.get("unit"))
         values["source_tags"][field_name] = tag_name
         aligned_facts.append(fact)
+
+    # Computed fallback: derive gross_profit = revenue - cost_of_revenue when the
+    # GrossProfit tag is absent (e.g. COST files revenue and COGS separately).
+    if values.get("gross_profit") is None:
+        revenue_val = values.get("revenue")
+        cost_val = values.get("cost_of_revenue")
+        if revenue_val is not None and cost_val is not None:
+            values["gross_profit"] = revenue_val - cost_val
+            values["source_tags"]["gross_profit"] = "_computed:revenue-cost_of_revenue"
+
+    # Second pass: enforce required fields in METRIC_TAGS order after all fallbacks.
+    for field_name in METRIC_TAGS:
+        if field_name in required_field_names and values.get(field_name) is None:
+            raise FinancialMetricMappingError(
+                field_name=field_name,
+                candidate_tags=METRIC_TAGS.get(field_name, []),
+                ticker=ticker,
+                cik=cik,
+                period_context=_period_context(anchor),
+            )
 
     if aligned_facts:
         values["period_end"] = max(str(fact["end"]) for fact in aligned_facts if fact.get("end"))
@@ -184,6 +334,12 @@ def _resolve_anchor(
         return None
 
 
+# Balance-sheet snapshot metrics that are point-in-time values and may be
+# carried forward from a comparative period when the current-period XBRL tag
+# is absent (e.g. COST FY2025 10-K omits the current-date Goodwill tag).
+_BALANCE_SHEET_FALLBACK_FIELDS = frozenset({"goodwill"})
+
+
 def _safe_lookup(
     store: CompanyFactsMetricStore,
     field_name: str,
@@ -192,7 +348,8 @@ def _safe_lookup(
 ) -> Optional[Tuple[str, dict[str, Any]]]:
     try:
         if anchor is not None:
-            return store.metric_for_anchor_period(metric_tags, anchor=anchor, allow_fallback=False)
+            allow_fallback = field_name in _BALANCE_SHEET_FALLBACK_FIELDS
+            return store.metric_for_anchor_period(metric_tags, anchor=anchor, allow_fallback=allow_fallback)
         return store.latest_metric_from_candidates(metric_tags)
     except ValueError:
         logger.warning("FinancialMetric parser missing metric '%s'; defaulting to None.", field_name)
